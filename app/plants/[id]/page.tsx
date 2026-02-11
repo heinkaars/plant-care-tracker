@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { storage } from '@/lib/storage';
@@ -9,30 +9,31 @@ import { Plant, CareType } from '@/types/plant';
 import { format, parseISO } from 'date-fns';
 import { getCurrentSeason, getSeasonDisplay } from '@/lib/seasonUtils';
 
-export default function PlantDetailPage({ params }: { params: { id: string } }) {
+export default function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [plant, setPlant] = useState<Plant | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const loadedPlant = storage.getPlant(params.id);
+    const loadedPlant = storage.getPlant(id);
     if (!loadedPlant) {
       router.push('/plants');
       return;
     }
     setPlant(loadedPlant);
     setLoading(false);
-  }, [params.id, router]);
+  }, [id, router]);
 
   const handleCareEvent = (careType: CareType) => {
     const notes = prompt(`Add notes for ${careType} (optional):`);
-    storage.addCareEvent(params.id, careType, notes || undefined);
-    setPlant(storage.getPlant(params.id)!);
+    storage.addCareEvent(id, careType, notes || undefined);
+    setPlant(storage.getPlant(id)!);
   };
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this plant?')) {
-      storage.deletePlant(params.id);
+      storage.deletePlant(id);
       router.push('/plants');
     }
   };
