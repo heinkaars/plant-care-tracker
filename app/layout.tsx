@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
 import { Analytics } from '@vercel/analytics/react';
+import { AppProviders } from '@/components/AppProviders';
 
 export const metadata: Metadata = {
   title: "Plant Care Tracker",
@@ -16,39 +17,41 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="min-h-screen bg-gray-50">
-          {/* Navigation */}
-          <nav className="bg-white shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between h-16 items-center">
-                <div className="flex items-center space-x-8">
-                  <Link href="/" className="text-xl font-bold text-green-600">
-                    🪴 Plant Care
-                  </Link>
-                  <div className="hidden md:flex space-x-4">
-                    <Link
-                      href="/"
-                      className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
-                    >
-                      Dashboard
+        <AppProviders>
+          <div className="min-h-screen bg-gray-50">
+            {/* Navigation */}
+            <nav className="bg-white shadow-sm">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex justify-between h-16 items-center">
+                  <div className="flex items-center space-x-8">
+                    <Link href="/" className="text-xl font-bold text-green-600">
+                      🪴 Plant Care
                     </Link>
-                    <Link
-                      href="/plants"
-                      className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
-                    >
-                      My Plants
-                    </Link>
+                    <div className="hidden md:flex space-x-4">
+                      <Link
+                        href="/"
+                        className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
+                      >
+                        Dashboard
+                      </Link>
+                      <Link
+                        href="/plants"
+                        className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
+                      >
+                        My Plants
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </nav>
+            </nav>
 
-          {/* Main Content */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </main>
-        </div>
+            {/* Main Content */}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {children}
+            </main>
+          </div>
+        </AppProviders>
         <Analytics />
       </body>
     </html>

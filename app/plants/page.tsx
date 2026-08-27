@@ -12,29 +12,37 @@ export default function PlantsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
+
   // Check URL params
   useEffect(() => {
+    let cancelled = false;
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('add') === 'true') {
       setShowAddModal(true);
       // Clean up URL
       window.history.replaceState({}, '', '/plants');
     }
-    setPlants(storage.getPlants());
-    setLoading(false);
+    storage.getPlants().then((loaded) => {
+      if (!cancelled) {
+        setPlants(loaded);
+        setLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handlePlantAdded = (plant: Plant) => {
-    storage.addPlant(plant);
-    setPlants(storage.getPlants());
+  const handlePlantAdded = async (plant: Plant) => {
+    await storage.addPlant(plant);
+    setPlants(await storage.getPlants());
     setShowAddModal(false);
   };
 
-  const handleDeletePlant = (id: string) => {
+  const handleDeletePlant = async (id: string) => {
     if (confirm('Are you sure you want to delete this plant?')) {
-      storage.deletePlant(id);
-      setPlants(storage.getPlants());
+      await storage.deletePlant(id);
+      setPlants(await storage.getPlants());
     }
   };
 

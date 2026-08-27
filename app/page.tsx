@@ -12,8 +12,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setPlants(storage.getPlants());
-    setLoading(false);
+    let cancelled = false;
+    storage.getPlants().then((loaded) => {
+      if (!cancelled) {
+        setPlants(loaded);
+        setLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) {
