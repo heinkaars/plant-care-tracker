@@ -39,7 +39,7 @@ export function AuthForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-sm">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <input
         type="email"
         placeholder="Email"

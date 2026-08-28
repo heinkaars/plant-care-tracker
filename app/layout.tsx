@@ -3,6 +3,7 @@ import "./globals.css";
 import Link from "next/link";
 import { Analytics } from '@vercel/analytics/react';
 import { AppProviders } from '@/components/AppProviders';
+import { NavAccountLink } from '@/components/NavAccountLink';
 
 export const metadata: Metadata = {
   title: "Plant Care Tracker",
@@ -42,6 +43,7 @@ export default function RootLayout({
                       </Link>
                     </div>
                   </div>
+                  <NavAccountLink />
                 </div>
               </div>
             </nav>
