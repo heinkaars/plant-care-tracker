@@ -151,21 +151,32 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
           frequencyDays: data.wateringFrequency,
           seasonalFrequency: data.wateringSeasonal,
           lastCareDate: null,
-          nextDueDate: addDays(new Date(), data.wateringFrequency).toISOString(),
+          // A frequency of 0 means "skip" (e.g. no winter fertilizing) — leave
+          // nextDueDate unset rather than due immediately.
+          nextDueDate:
+            data.wateringFrequency === 0
+              ? null
+              : addDays(new Date(), data.wateringFrequency).toISOString(),
         },
         {
           type: 'fertilizing',
           frequencyDays: data.fertilizingFrequency,
           seasonalFrequency: data.fertilizingSeasonal,
           lastCareDate: null,
-          nextDueDate: addDays(new Date(), data.fertilizingFrequency).toISOString(),
+          nextDueDate:
+            data.fertilizingFrequency === 0
+              ? null
+              : addDays(new Date(), data.fertilizingFrequency).toISOString(),
         },
         {
           type: 'repotting',
           frequencyDays: data.repottingFrequency,
           seasonalFrequency: data.repottingSeasonal,
           lastCareDate: null,
-          nextDueDate: addDays(new Date(), data.repottingFrequency).toISOString(),
+          nextDueDate:
+            data.repottingFrequency === 0
+              ? null
+              : addDays(new Date(), data.repottingFrequency).toISOString(),
         },
       ],
       careHistory: [],

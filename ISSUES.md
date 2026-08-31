@@ -55,7 +55,7 @@ They are typechecked and their rendering is verified, nothing more.
 
 ### 2. Winter "skip fertilizing" makes the plant permanently overdue
 
-**Status:** Open
+**Status:** Fixed — 2026-08-31
 
 Both AI prompts instruct the model to return `0` for winter fertilizing when
 the plant should not be fed

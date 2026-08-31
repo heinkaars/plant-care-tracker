@@ -149,7 +149,10 @@ export const storage = {
       const frequency = schedule.seasonalFrequency
         ? getSeasonalFrequency(schedule.seasonalFrequency)
         : schedule.frequencyDays;
-      schedule.nextDueDate = addDays(parseISO(now), frequency).toISOString();
+      // A frequency of 0 means "skip this season" (e.g. no winter fertilizing) —
+      // leave nextDueDate unset rather than due immediately, until the season
+      // turns and the next "Mark Done" picks up a non-zero frequency.
+      schedule.nextDueDate = frequency === 0 ? null : addDays(parseISO(now), frequency).toISOString();
     }
 
     await storage.updatePlant(plantId, plant);
