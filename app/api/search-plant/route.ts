@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { guard } from '@/lib/api-guard';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(request: NextRequest) {
+  // Verified session + per-user / per-IP rate limit (see lib/api-guard.ts).
+  const guardResult = await guard(request, 'search-plant', 10, 30);
+  if (guardResult.response) return guardResult.response;
+
   try {
     const { query } = await request.json();
 

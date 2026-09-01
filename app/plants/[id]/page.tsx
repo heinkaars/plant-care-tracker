@@ -16,24 +16,30 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
 
   useEffect(() => {
-    const loadedPlant = storage.getPlant(id);
-    if (!loadedPlant) {
-      router.push('/plants');
-      return;
-    }
-    setPlant(loadedPlant);
-    setLoading(false);
+    let cancelled = false;
+    storage.getPlant(id).then((loadedPlant) => {
+      if (cancelled) return;
+      if (!loadedPlant) {
+        router.push('/plants');
+        return;
+      }
+      setPlant(loadedPlant);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
 
-  const handleCareEvent = (careType: CareType) => {
+  const handleCareEvent = async (careType: CareType) => {
     const notes = prompt(`Add notes for ${careType} (optional):`);
-    storage.addCareEvent(id, careType, notes || undefined);
-    setPlant(storage.getPlant(id)!);
+    await storage.addCareEvent(id, careType, notes || undefined);
+    setPlant((await storage.getPlant(id))!);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirm('Are you sure you want to delete this plant?')) {
-      storage.deletePlant(id);
+      await storage.deletePlant(id);
       router.push('/plants');
     }
   };
@@ -139,7 +145,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                 const currentSeason = getCurrentSeason();
                 const currentFreq = getCurrentFrequency(schedule);
                 const hasSeasonal = !!schedule.seasonalFrequency;
-                
+
                 return (
                   <div
                     key={schedule.type}
@@ -185,7 +191,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                         Mark Done
                       </button>
                     </div>
-                    
+
                     {/* Show seasonal breakdown if available */}
                     {hasSeasonal && schedule.seasonalFrequency && (
                       <div className="mt-3 pt-3 border-t border-gray-100">

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Plant, PlantFormData } from '@/types/plant';
+import { CareSchedule, CareType, Plant, PlantFormData, SeasonalFrequency } from '@/types/plant';
 import { addDays } from 'date-fns';
+import { getCurrentFrequency } from '@/lib/careStatus';
 
 interface AddPlantModalProps {
   onClose: () => void;
@@ -136,6 +137,28 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
     }
   };
 
+  // Seeds a schedule's nextDueDate from the current season's frequency
+  // (via getCurrentFrequency) rather than the summer value the form
+  // displays, so an AI-added plant is scheduled correctly regardless of
+  // what season it's added in. A frequency of 0 means "skip this season" —
+  // leave nextDueDate unset rather than due immediately.
+  const buildSchedule = (
+    type: CareType,
+    frequencyDays: number,
+    seasonalFrequency?: SeasonalFrequency
+  ): CareSchedule => {
+    const schedule: CareSchedule = {
+      type,
+      frequencyDays,
+      seasonalFrequency,
+      lastCareDate: null,
+      nextDueDate: null,
+    };
+    const frequency = getCurrentFrequency(schedule);
+    schedule.nextDueDate = frequency === 0 ? null : addDays(new Date(), frequency).toISOString();
+    return schedule;
+  };
+
   const createPlant = (data: PlantFormData) => {
     const now = new Date().toISOString();
     const plant: Plant = {
@@ -146,27 +169,9 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       notes: data.notes,
       dateAdded: now,
       careSchedules: [
-        {
-          type: 'watering',
-          frequencyDays: data.wateringFrequency,
-          seasonalFrequency: data.wateringSeasonal,
-          lastCareDate: null,
-          nextDueDate: addDays(new Date(), data.wateringFrequency).toISOString(),
-        },
-        {
-          type: 'fertilizing',
-          frequencyDays: data.fertilizingFrequency,
-          seasonalFrequency: data.fertilizingSeasonal,
-          lastCareDate: null,
-          nextDueDate: addDays(new Date(), data.fertilizingFrequency).toISOString(),
-        },
-        {
-          type: 'repotting',
-          frequencyDays: data.repottingFrequency,
-          seasonalFrequency: data.repottingSeasonal,
-          lastCareDate: null,
-          nextDueDate: addDays(new Date(), data.repottingFrequency).toISOString(),
-        },
+        buildSchedule('watering', data.wateringFrequency, data.wateringSeasonal),
+        buildSchedule('fertilizing', data.fertilizingFrequency, data.fertilizingSeasonal),
+        buildSchedule('repotting', data.repottingFrequency, data.repottingSeasonal),
       ],
       careHistory: [],
     };

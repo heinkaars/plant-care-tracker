@@ -1,0 +1,513 @@
+# Outstanding Issues
+
+Findings from a full read of the codebase, ordered by priority. Line
+references point at the current `add-supabase-auth` branch.
+
+**Branch state:** `694dbad` and `c3f5f0f` sit on `add-supabase-auth`; `main` is
+still the localStorage version. Nothing below has shipped.
+
+**Recently closed:** the auth context and `AuthForm` added in `694dbad` were
+never rendered by any page. Fixed in `c3f5f0f` — see `/account` and
+`components/NavAccountLink.tsx`.
+
+**Automation:** a scheduled cloud agent fixes one `Open` item per weekday
+(in the order below, skipping `Blocked` ones) and pushes to
+`add-supabase-auth`. Each item carries a `**Status:**` line —
+`Open` / `Blocked — <reason>` / `Fixed — <date>` — since that line is the only
+memory this automation has between runs. Do not remove or reorder items;
+append new ones discovered along the way instead.
+
+---
+
+## P0 — Critical
+
+### 1. Supabase env vars are missing locally, so the app won't build or run
+
+**Status:** Fixed — 2026-09-01
+
+Resolved by creating a new, separate Supabase account/project (the two
+existing free-tier projects were already at the account's 2-project cap) and
+filling in `.env.local`: `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Ran
+`supabase/schema.sql` in that project's SQL Editor and enabled anonymous
+sign-ins under Authentication → Providers. Verified end-to-end in the
+browser: anonymous session bootstraps on load, dashboard renders, adding a
+plant inserts and reads back through RLS with no console errors.
+
+**Correction — 2026-09-01.** The line above originally also claimed all three
+auth flows had been exercised. A re-check in the browser found that was not
+true: sign-up failed outright against the live project. The schema, the env
+vars and the anonymous bootstrap were genuinely verified; sign-up was not, and
+was broken — see item 26. All three flows have since been run for real, and
+the claim now holds.
+
+**Extends to Vercel — 2026-09-01.** The env vars above were local only.
+Every Vercel deployment of this branch had failed the same way since it was
+created (`694dbad`, 2026-08-27) — 9 failures straight, invisible unless you
+went looking, since Vercel keeps serving the last good build so nothing
+outwardly breaks. Root cause was the same missing vars, one level up: Vercel
+itself didn't have them.
+
+Fixing it took two passes. Saving the four vars
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `TRUSTED_PROXY_HOPS`) in the dashboard defaulted
+their **Environments** field to Production only, so the next Preview build
+(`vercel redeploy --target preview`) failed on the identical error. Adding
+Preview to all four fixed it for real — confirmed by a green build
+(`plant-care-tracker-juco580qt-…`) whose two readable `NEXT_PUBLIC_*` values
+were pulled back and diffed against `.env.local` byte-for-byte, so this
+wasn't just "a build succeeded," which item 1 above already showed is
+possible with dummy values too.
+
+Also confirmed while in there: the Production alias
+(`plant-care-tracker-rust.vercel.app`) has no Vercel Deployment Protection —
+real visitors reach it directly. Preview URLs do sit behind Vercel's login
+wall, which is normal and not a problem to fix.
+
+`.env.local` contains only `OPENAI_API_KEY`. Without
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, no Supabase
+client can be constructed anywhere — middleware, Server Components, or the
+browser — so **every page returns 500** on `npm run dev`.
+
+`npm run build` fails outright too, during static prerender of `/`, before
+middleware is even involved:
+
+```
+Error: @supabase/ssr: Your project's URL and API key are required to create a Supabase client!
+Export encountered an error on /page: /, exiting the build.
+```
+
+Confirmed to be purely the missing vars: the same build succeeds with dummy
+values substituted. So the deploy is broken, not just local dev.
+
+Consequence beyond local dev: the auth flows shipped in `c3f5f0f` (sign-up,
+sign-in, sign-out) have **never been run against a real Supabase project**.
+They are typechecked and their rendering is verified, nothing more.
+
+- Fill in `.env.local` from `env.example`, then exercise all three flows
+  before merging to `main`.
+- Run `supabase/schema.sql` in the SQL editor, and enable anonymous sign-ins
+  in the Supabase dashboard — the bootstrap in
+  [lib/auth-context.tsx:128](lib/auth-context.tsx#L128) depends on it.
+- Consider failing fast with a clear message when the vars are absent,
+  rather than a raw 500 from middleware.
+
+### 2. Winter "skip fertilizing" makes the plant permanently overdue
+
+**Status:** Fixed — 2026-08-31
+
+Both AI prompts instruct the model to return `0` for winter fertilizing when
+the plant should not be fed
+([search-plant:36](app/api/search-plant/route.ts#L36),
+[identify-plant:36](app/api/identify-plant/route.ts#L36)). Nothing treats `0`
+as "skip":
+[lib/storage.ts:152](lib/storage.ts#L152) computes `addDays(parseISO(now), 0)`,
+so the next due date lands on the moment the user marked the task done.
+[lib/careStatus.ts:23](lib/careStatus.ts#L23) then reports `overdue`
+immediately, and keeps reporting it for the rest of the winter.
+
+Every AI-added plant hits this the first time the user fertilizes in winter.
+The dashboard's overdue count is wrong, and the fix the user attempts —
+marking it done again — reproduces the state.
+
+A frequency of `0` needs to mean `nextDueDate = null` until the season turns,
+in both `addCareEvent` and the schedule seeding in `AddPlantModal`.
+
+### 3. The first due date always uses the summer frequency
+
+**Status:** Fixed — 2026-09-01
+
+[components/AddPlantModal.tsx:154](components/AddPlantModal.tsx#L154) seeds
+every `nextDueDate` from `data.wateringFrequency` /
+`data.fertilizingFrequency` / `data.repottingFrequency` — and those are
+hardcoded to the summer value when the AI fills the form
+([AddPlantModal.tsx:66](components/AddPlantModal.tsx#L66)). Seasonal data is
+stored on the schedule but ignored for the initial date.
+
+Add a plant in December and it is scheduled on a summer cadence until the
+first "Mark Done". `storage.addCareEvent` gets this right via
+`getSeasonalFrequency`, so the two code paths disagree about the same plant.
+
+Seed the first due date through `getCurrentFrequency` like everything else.
+
+### 4. Signing in strands the anonymous account's plants
+
+**Status:** Blocked — needs a product decision on merge behavior when both accounts hold plants — ask the user before implementing
+
+`signIn` swaps to a different user id, and every plant row is scoped to the
+id that created it ([lib/auth-context.tsx:29](lib/auth-context.tsx#L29)
+documents this). A user who adds plants anonymously and then signs into an
+existing account silently loses access to all of them.
+
+This became reachable the moment the account UI shipped. Needs a server-side
+migration (a Postgres function reassigning `user_id`) invoked before or
+during sign-in, plus a decision about what to do when both accounts hold
+plants.
+
+Note the doc comment points at "the README" for this migration; the README
+says nothing about it. See also item 20.
+
+### 5. A plant added before the session exists is silently discarded
+
+**Status:** Open
+
+No page waits for the auth bootstrap. [app/page.tsx:16](app/page.tsx#L16),
+[app/plants/page.tsx:25](app/plants/page.tsx#L25) and
+[app/plants/[id]/page.tsx:20](app/plants/[id]/page.tsx#L20) all call `storage`
+on mount, racing the `signInAnonymously` call in `AuthProvider`.
+
+Reads degrade quietly — RLS returns zero rows, which renders as an empty
+collection. Writes lose data: if the user submits the add-plant form before
+the session lands, [lib/storage.ts:80](lib/storage.ts#L80) logs to the console
+and returns `undefined`, while
+[app/plants/page.tsx:36](app/plants/page.tsx#L36) closes the modal as though
+it had worked. The plant is gone with no message.
+
+Gate every `storage` call on `ready && userId` from `useAuth`, and surface a
+failed insert to the user.
+
+### 6. Photo uploads are unbounded
+
+**Status:** Open
+
+[components/AddPlantModal.tsx:86](components/AddPlantModal.tsx#L86) reads the
+camera file straight to base64 — no size check, no resize, no compression —
+then both ships it to OpenAI Vision and stores it raw in a Postgres `text`
+column ([supabase/schema.sql:16](supabase/schema.sql#L16)).
+
+A 5–10 MB phone photo means bloated rows, slow list queries (`storage.getPlants`
+does `select *`, pulling every photo to render a grid), and inflated
+per-request OpenAI cost. App Router route handlers have no default body-size
+limit, so `/api/identify-plant` will forward an arbitrarily large image on
+your key — the rate limiter in `lib/api-guard.ts` caps call count, not payload.
+
+- Resize/compress client-side to a sane max edge before upload.
+- Move photos to Supabase Storage and keep a URL in the row.
+- Select explicit columns in list views so photos aren't fetched for the grid.
+- Reject oversized bodies at the route boundary.
+
+---
+
+## P1 — High
+
+### 7. Storage failures are invisible to the user
+
+**Status:** Open
+
+Every method in [lib/storage.ts](lib/storage.ts) swallows its error into a
+`console.error` and returns an empty or `undefined` value
+([:52](lib/storage.ts#L52), [:64](lib/storage.ts#L64),
+[:100](lib/storage.ts#L100), [:121](lib/storage.ts#L121),
+[:128](lib/storage.ts#L128)). A network blip on the dashboard renders as
+"No plants yet!" — indistinguishable from a genuinely empty account. Failed
+deletes and updates produce no feedback at all; the UI simply doesn't change.
+
+Relatedly, [app/plants/[id]/page.tsx:37](app/plants/[id]/page.tsx#L37) does
+`setPlant((await storage.getPlant(id))!)` — a failed refetch after a care
+event sets `plant` to `undefined` and pins the page on "Loading..." forever.
+
+Return errors to callers and render an error state distinct from the empty
+state.
+
+### 8. No ESLint configuration exists
+
+**Status:** Open
+
+There is no `.eslintrc*` or `eslint.config.*` in the repo. `npm run lint`
+drops into `next lint`'s interactive "How would you like to configure
+ESLint?" prompt — it has never actually run against this codebase, and it
+will hang any non-interactive caller.
+
+This also blocks item 22: a CI job that runs lint cannot pass until this is
+fixed. `next lint` is deprecated in Next 15 and removed in 16, so configure
+the ESLint CLI directly rather than reviving it.
+
+### 9. AI responses are parsed but never validated, and use a legacy model
+
+**Status:** Open
+
+Both routes `JSON.parse` the model's output and trust its shape completely
+([search-plant:82](app/api/search-plant/route.ts#L82),
+[identify-plant:87](app/api/identify-plant/route.ts#L87)). A response missing
+a season key, or returning a string where a number belongs, flows unchecked
+into `PlantFormData`, into the `jsonb` columns, and then into `addDays` —
+where a non-number yields an Invalid Date.
+
+Neither route asks for JSON mode; both regex the object out of the response
+as a fallback. And [search-plant:29](app/api/search-plant/route.ts#L29) still
+pins `model: 'gpt-4'`, which is slower and more expensive than the `gpt-4o`
+the vision route already uses.
+
+- Set `response_format: { type: 'json_object' }` so the model returns
+  parseable JSON in the first place.
+- Validate against a schema (zod) at the route boundary and return a 502 on a
+  malformed model response.
+- Move `search-plant` off `gpt-4`.
+
+### 10. `addCareEvent` is a read-modify-write of the whole row
+
+**Status:** Open
+
+[lib/storage.ts:132](lib/storage.ts#L132) fetches the plant, mutates the
+history and schedule in JS, then writes every column back — photo included.
+Two tabs marking care on the same plant lose one of the two events, and each
+care event round-trips the full base64 photo in both directions.
+
+Move the mutation into a Postgres function, or at minimum update only the
+`care_schedules` and `care_history` columns.
+
+### 11. Password reset is implemented but unreachable
+
+**Status:** Open
+
+`requestPasswordReset` and `resetPassword`
+([lib/auth-context.tsx:185](lib/auth-context.tsx#L185)) are fully written and
+exposed on the context, but no component calls them —
+[components/AuthForm.tsx](components/AuthForm.tsx) offers only sign-up and
+sign-in. A user who forgets their password has no recovery path in the UI.
+
+Either wire a reset flow into `AuthForm` / `/account`, or drop the dead code.
+
+### 12. No way to edit a plant
+
+**Status:** Open
+
+The README advertises "Add, edit, and remove plants from your collection".
+There is no edit UI — `storage.updatePlant` exists but is only ever called
+internally by `addCareEvent`. Name, notes, photo, and frequencies are all
+fixed at creation, which is a problem given item 3 seeds them wrong.
+
+### 13. No tests
+
+**Status:** Open
+
+[lib/careStatus.ts](lib/careStatus.ts) and [lib/seasonUtils.ts](lib/seasonUtils.ts)
+are pure, date-driven business logic — season boundaries, overdue vs. due-soon
+thresholds, dashboard aggregation. Cheap to unit test, easy to break silently.
+Start here; items 2 and 3 are both exactly the kind of bug a table-driven test
+over the four seasons would have caught.
+
+### 14. Dependency vulnerabilities
+
+**Status:** Open
+
+`npm audit --omit=dev` reports **5 high-severity advisories**: `sharp` <0.35.0
+inheriting four libvips CVEs, and two `postcss` source-map path-traversal
+advisories via `next`. Both are fixable with `npm audit fix`.
+
+Separately, `next` is on 15.5.12 with 15.5.24 available — worth taking the
+patch releases at the same time.
+
+### 15. Stray files in the working tree
+
+**Status:** Open
+
+`plant-care-tracker-auth-kit.zip` (28 KB) and `Plant-Care.code-workspace` sit
+untracked in the repo root. The zip is unvetted — confirm it holds no
+credentials, then delete it or add both to `.gitignore`.
+
+---
+
+## P2 — Medium
+
+### 16. Native `confirm()` / `prompt()` for destructive and data-entry actions
+
+**Status:** Open
+
+Plant deletion uses `confirm()` ([plants/page.tsx:43](app/plants/page.tsx#L43),
+[plants/[id]/page.tsx:41](app/plants/[id]/page.tsx#L41)) and care notes use
+`prompt()` ([plants/[id]/page.tsx:35](app/plants/[id]/page.tsx#L35)). Blocking,
+unstyled, poor on mobile, and inconsistent with the rest of the UI.
+
+### 17. Hemisphere is hardcoded to northern
+
+**Status:** Open
+
+[lib/seasonUtils.ts:10](lib/seasonUtils.ts#L10) accepts a `hemisphere`
+argument but every caller uses the default — `getSeasonalFrequency` calls
+`getCurrentSeason(date)` with no passthrough
+([seasonUtils.ts:54](lib/seasonUtils.ts#L54)), so the parameter is
+unreachable from the app. Southern-hemisphere users get inverted seasonal
+care schedules. Needs a user setting threaded through `getSeasonalFrequency`.
+
+### 18. Every AI failure blames the user's API key
+
+**Status:** Open
+
+[components/AddPlantModal.tsx:79](components/AddPlantModal.tsx#L79) and
+[:133](components/AddPlantModal.tsx#L133) render "Please check your API key in
+.env.local" for any non-OK response — including the guard's 401 ("Sign in
+required") and 429 ("Too many requests") from
+[lib/api-guard.ts](lib/api-guard.ts). Wrong advice for the two cases a real
+user is most likely to hit, and it leaks a dev-only detail into the product.
+
+Read `error` off the response body and show that instead.
+
+### 19. Plain `<img>` instead of `next/image`
+
+**Status:** Open
+
+Used on the dashboard, collection, and detail pages — no lazy loading or
+optimization. Relatedly, `images.domains` in `next.config.js` is dead config,
+since nothing uses `next/image` at all (and `domains` is itself deprecated in
+favour of `remotePatterns`).
+
+### 20. Dangling reference to a `MIGRATION.md` that doesn't exist
+
+**Status:** Open
+
+[lib/storage.ts:9](lib/storage.ts#L9) points readers at "MIGRATION.md for the
+exact diffs in page.tsx, plants/page.tsx, and plants/[id]/page.tsx". No such
+file is in the repo. Either write it or drop the reference — and see item 4,
+which has the same problem pointing at the README.
+
+### 21. Dead code: discarded client-side plant id
+
+**Status:** Open
+
+[components/AddPlantModal.tsx:142](components/AddPlantModal.tsx#L142) generates
+an `id` that `storage.addPlant` silently ignores — Supabase generates the real
+one. A leftover from the localStorage era that misleads on first read.
+
+---
+
+## P3 — Low / polish
+
+### 22. No CI
+
+**Status:** Open
+
+Nothing runs lint, typecheck, or build on push. A GitHub Action covering all
+three would have caught the unwired-auth gap indirectly and guards the tests
+from item 13. Note it needs item 8 resolved first — there is no lint config to
+run today.
+
+### 23. No error boundary
+
+**Status:** Open
+
+An uncaught render error blanks the page with no recovery path.
+
+### 24. Loading states are bare text
+
+**Status:** Open
+
+Every page renders `Loading...` centered on an empty screen. Skeletons
+matching the eventual layout would reduce the jolt.
+
+### 25. Documentation is out of date as of `694dbad`
+
+**Status:** Open
+
+Both [README.md](README.md) and [SETUP.md](SETUP.md) still describe
+LocalStorage as the storage layer and omit Supabase entirely:
+
+- README lists "Data Storage: Local Storage (browser-based)" in the tech
+  stack, documents only `OPENAI_API_KEY`, and its project-structure tree omits
+  `lib/supabase/`, `middleware.ts`, `lib/api-guard.ts`, and `supabase/schema.sql`.
+- SETUP claims "No account or backend required", and its "Data Not Persisting?"
+  troubleshooting section now gives actively wrong advice (it tells users to
+  check that LocalStorage is enabled).
+- README's "Future Enhancements" list opens with "Backend database for data
+  sync across devices" — which is what `694dbad` actually did.
+
+---
+
+## Found after the first pass
+
+Appended here to keep the numbering above stable; the `**Priority:**` line
+carries the real severity.
+
+### 26. Sign-up assumed email confirmation was switched off, and failed
+
+**Priority:** P0
+**Status:** Fixed — 2026-09-01
+
+`signUp` set the address and the password in two back-to-back `updateUser`
+calls, on the reasoning that "with email confirmation turned off the address
+attaches immediately". The live project has it turned *on* —
+`GET /auth/v1/settings` reports `mailer_autoconfirm: false`, which is also the
+Supabase default — so the address only went as far as `new_email`, the account
+stayed anonymous, and the second call came back:
+
+```
+422 — Updating password of an anonymous user without an email or phone is not allowed
+```
+
+Every attempt to claim an anonymous account ended on "Something went wrong.
+Please try again." Found by actually running the form; a typecheck cannot see
+this, since the wrong assumption is about a server-side project setting.
+
+Fixed in [lib/auth-context.tsx](lib/auth-context.tsx): `signUp` now reads the
+user it gets back and returns `'complete'` or `'confirmation-required'`
+depending on whether the address actually attached, so the same code is
+correct whichever way the project is configured. A new `confirmSignUp` takes
+the emailed code, verifies it with `verifyOtp({ type: 'email_change' })` — which
+is what makes the account non-anonymous — and only then sets the password.
+[components/AuthForm.tsx](components/AuthForm.tsx) grew the matching code-entry
+step, holding the typed password in component state until the code clears.
+
+**Dependency this introduces, and it is currently unmet.** The password
+cannot travel on the emailed link, so the flow needs a typed code, and that
+means the project's **Change Email Address** template must include
+`{{ .Token }}`. Confirmed by inspecting a real send: the project is on the
+stock template, which carries only `{{ .ConfirmationURL }}`, so there is no
+code to type. `resetPassword` has carried the same unstated requirement since
+it was written (item 11).
+
+**Resolved by configuration:** "Confirm email" is now **off**
+(Authentication → Providers → Email), which `GET /auth/v1/settings` confirms
+as `mailer_autoconfirm: true`. `signUp` returns `'complete'`, the password is
+set in the same breath, no mail is sent, and the code-entry step never
+renders. That matches what the account screen promises, and it sidesteps the
+built-in SMTP rate limit (roughly two mails an hour on the free tier) that
+would otherwise make a confirmation-gated sign-up fragile.
+
+The alternative, if addresses ever need verifying again, is to add
+`{{ .Token }}` to the template and let the code-entry step do its job. No code
+change either way — that is the point of the branch.
+
+**Consequence to be aware of:** `confirmSignUp` and the form's code step are
+now unreachable in *this* project, in the same way item 11's reset flow is.
+They are not speculative, though — a fresh Supabase project has confirmation
+on by default, so without that branch anyone cloning this repo walks straight
+into the 422 above. They stay untested here regardless.
+
+**Verified — 2026-09-01**, in the browser against the live project, from a
+cleared session: anonymous bootstrap → add a plant → sign up → the plant is
+still there under the now-permanent account (same user id, nothing migrated)
+→ sign out → fresh anonymous account with an empty collection → sign back in
+→ the plant returns. No console errors anywhere in that sequence.
+
+One incidental finding: a second `updateUser({ email })` for the same address
+invalidates the first mail's token, so during testing an older link reports
+`otp_expired`. Check the timestamp before concluding a link is broken.
+
+### 27. Sign-out had never been run against the live project
+
+**Priority:** P2
+**Status:** Fixed — 2026-09-01 (verification only, no code change)
+
+The sign-out control only renders once a session has a real email
+([app/account/page.tsx:34](app/account/page.tsx#L34)), so it could not be
+reached while item 26 kept sign-up from ever completing. `signOut` and the
+fresh-anonymous-account rebootstrap it triggers
+([lib/auth-context.tsx:208](lib/auth-context.tsx#L208)) had therefore never
+actually run.
+
+Both now have. Signing out drops to a brand-new anonymous account whose
+collection is empty — which also demonstrates the per-user RLS scoping — and
+signing back in restores the previous account's plants.
+
+### 28. A wrong confirmation code was reported as an expired one
+
+**Priority:** P3
+**Status:** Fixed — 2026-09-01
+
+`friendlyMessage` tested for `expired` before its `invalid`+`token` branch
+([lib/auth-context.tsx:53](lib/auth-context.tsx#L53)). Supabase answers both a
+wrong code and a stale one with the same string, "Token has expired or is
+invalid", so the first branch always won and the second was dead code — a
+freshly mistyped code told the user it had expired and to send a new one.
+Observed while testing item 26. Merged into one branch that does not claim to
+know which of the two it was.
