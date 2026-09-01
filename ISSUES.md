@@ -23,7 +23,16 @@ append new ones discovered along the way instead.
 
 ### 1. Supabase env vars are missing locally, so the app won't build or run
 
-**Status:** Blocked — needs a real Supabase project's URL/anon key — cannot be obtained without user input
+**Status:** Fixed — 2026-09-01
+
+Resolved by creating a new, separate Supabase account/project (the two
+existing free-tier projects were already at the account's 2-project cap) and
+filling in `.env.local`: `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Ran
+`supabase/schema.sql` in that project's SQL Editor and enabled anonymous
+sign-ins under Authentication → Providers. Verified end-to-end in the
+browser: anonymous session bootstraps on load, dashboard renders, adding a
+plant inserts and reads back through RLS with no console errors.
 
 `.env.local` contains only `OPENAI_API_KEY`. Without
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, no Supabase
