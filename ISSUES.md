@@ -41,6 +41,29 @@ vars and the anonymous bootstrap were genuinely verified; sign-up was not, and
 was broken — see item 26. All three flows have since been run for real, and
 the claim now holds.
 
+**Extends to Vercel — 2026-09-01.** The env vars above were local only.
+Every Vercel deployment of this branch had failed the same way since it was
+created (`694dbad`, 2026-08-27) — 9 failures straight, invisible unless you
+went looking, since Vercel keeps serving the last good build so nothing
+outwardly breaks. Root cause was the same missing vars, one level up: Vercel
+itself didn't have them.
+
+Fixing it took two passes. Saving the four vars
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `TRUSTED_PROXY_HOPS`) in the dashboard defaulted
+their **Environments** field to Production only, so the next Preview build
+(`vercel redeploy --target preview`) failed on the identical error. Adding
+Preview to all four fixed it for real — confirmed by a green build
+(`plant-care-tracker-juco580qt-…`) whose two readable `NEXT_PUBLIC_*` values
+were pulled back and diffed against `.env.local` byte-for-byte, so this
+wasn't just "a build succeeded," which item 1 above already showed is
+possible with dummy values too.
+
+Also confirmed while in there: the Production alias
+(`plant-care-tracker-rust.vercel.app`) has no Vercel Deployment Protection —
+real visitors reach it directly. Preview URLs do sit behind Vercel's login
+wall, which is normal and not a problem to fix.
+
 `.env.local` contains only `OPENAI_API_KEY`. Without
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, no Supabase
 client can be constructed anywhere — middleware, Server Components, or the
