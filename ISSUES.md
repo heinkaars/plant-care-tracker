@@ -76,7 +76,7 @@ in both `addCareEvent` and the schedule seeding in `AddPlantModal`.
 
 ### 3. The first due date always uses the summer frequency
 
-**Status:** Open
+**Status:** Fixed — 2026-09-01
 
 [components/AddPlantModal.tsx:154](components/AddPlantModal.tsx#L154) seeds
 every `nextDueDate` from `data.wateringFrequency` /
