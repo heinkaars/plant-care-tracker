@@ -34,6 +34,13 @@ sign-ins under Authentication → Providers. Verified end-to-end in the
 browser: anonymous session bootstraps on load, dashboard renders, adding a
 plant inserts and reads back through RLS with no console errors.
 
+**Correction — 2026-09-01.** The line above originally also claimed all three
+auth flows had been exercised. A re-check in the browser found that was not
+true: sign-up failed outright against the live project. The schema, the env
+vars and the anonymous bootstrap were genuinely verified; sign-up was not, and
+was broken — see item 26. All three flows have since been run for real, and
+the claim now holds.
+
 `.env.local` contains only `OPENAI_API_KEY`. Without
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, no Supabase
 client can be constructed anywhere — middleware, Server Components, or the
@@ -380,3 +387,104 @@ LocalStorage as the storage layer and omit Supabase entirely:
   check that LocalStorage is enabled).
 - README's "Future Enhancements" list opens with "Backend database for data
   sync across devices" — which is what `694dbad` actually did.
+
+---
+
+## Found after the first pass
+
+Appended here to keep the numbering above stable; the `**Priority:**` line
+carries the real severity.
+
+### 26. Sign-up assumed email confirmation was switched off, and failed
+
+**Priority:** P0
+**Status:** Fixed — 2026-09-01
+
+`signUp` set the address and the password in two back-to-back `updateUser`
+calls, on the reasoning that "with email confirmation turned off the address
+attaches immediately". The live project has it turned *on* —
+`GET /auth/v1/settings` reports `mailer_autoconfirm: false`, which is also the
+Supabase default — so the address only went as far as `new_email`, the account
+stayed anonymous, and the second call came back:
+
+```
+422 — Updating password of an anonymous user without an email or phone is not allowed
+```
+
+Every attempt to claim an anonymous account ended on "Something went wrong.
+Please try again." Found by actually running the form; a typecheck cannot see
+this, since the wrong assumption is about a server-side project setting.
+
+Fixed in [lib/auth-context.tsx](lib/auth-context.tsx): `signUp` now reads the
+user it gets back and returns `'complete'` or `'confirmation-required'`
+depending on whether the address actually attached, so the same code is
+correct whichever way the project is configured. A new `confirmSignUp` takes
+the emailed code, verifies it with `verifyOtp({ type: 'email_change' })` — which
+is what makes the account non-anonymous — and only then sets the password.
+[components/AuthForm.tsx](components/AuthForm.tsx) grew the matching code-entry
+step, holding the typed password in component state until the code clears.
+
+**Dependency this introduces, and it is currently unmet.** The password
+cannot travel on the emailed link, so the flow needs a typed code, and that
+means the project's **Change Email Address** template must include
+`{{ .Token }}`. Confirmed by inspecting a real send: the project is on the
+stock template, which carries only `{{ .ConfirmationURL }}`, so there is no
+code to type. `resetPassword` has carried the same unstated requirement since
+it was written (item 11).
+
+**Resolved by configuration:** "Confirm email" is now **off**
+(Authentication → Providers → Email), which `GET /auth/v1/settings` confirms
+as `mailer_autoconfirm: true`. `signUp` returns `'complete'`, the password is
+set in the same breath, no mail is sent, and the code-entry step never
+renders. That matches what the account screen promises, and it sidesteps the
+built-in SMTP rate limit (roughly two mails an hour on the free tier) that
+would otherwise make a confirmation-gated sign-up fragile.
+
+The alternative, if addresses ever need verifying again, is to add
+`{{ .Token }}` to the template and let the code-entry step do its job. No code
+change either way — that is the point of the branch.
+
+**Consequence to be aware of:** `confirmSignUp` and the form's code step are
+now unreachable in *this* project, in the same way item 11's reset flow is.
+They are not speculative, though — a fresh Supabase project has confirmation
+on by default, so without that branch anyone cloning this repo walks straight
+into the 422 above. They stay untested here regardless.
+
+**Verified — 2026-09-01**, in the browser against the live project, from a
+cleared session: anonymous bootstrap → add a plant → sign up → the plant is
+still there under the now-permanent account (same user id, nothing migrated)
+→ sign out → fresh anonymous account with an empty collection → sign back in
+→ the plant returns. No console errors anywhere in that sequence.
+
+One incidental finding: a second `updateUser({ email })` for the same address
+invalidates the first mail's token, so during testing an older link reports
+`otp_expired`. Check the timestamp before concluding a link is broken.
+
+### 27. Sign-out had never been run against the live project
+
+**Priority:** P2
+**Status:** Fixed — 2026-09-01 (verification only, no code change)
+
+The sign-out control only renders once a session has a real email
+([app/account/page.tsx:34](app/account/page.tsx#L34)), so it could not be
+reached while item 26 kept sign-up from ever completing. `signOut` and the
+fresh-anonymous-account rebootstrap it triggers
+([lib/auth-context.tsx:208](lib/auth-context.tsx#L208)) had therefore never
+actually run.
+
+Both now have. Signing out drops to a brand-new anonymous account whose
+collection is empty — which also demonstrates the per-user RLS scoping — and
+signing back in restores the previous account's plants.
+
+### 28. A wrong confirmation code was reported as an expired one
+
+**Priority:** P3
+**Status:** Fixed — 2026-09-01
+
+`friendlyMessage` tested for `expired` before its `invalid`+`token` branch
+([lib/auth-context.tsx:53](lib/auth-context.tsx#L53)). Supabase answers both a
+wrong code and a stale one with the same string, "Token has expired or is
+invalid", so the first branch always won and the second was dead code — a
+freshly mistyped code told the user it had expired and to send a new one.
+Observed while testing item 26. Merged into one branch that does not claim to
+know which of the two it was.

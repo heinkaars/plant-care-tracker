@@ -18,13 +18,26 @@ type AuthState = {
   error: string | null;
 };
 
+/**
+ * Whether `signUp` finished outright, or stopped to wait on the code Supabase
+ * just emailed. Which one you get is a project setting, not a code path the
+ * caller chooses — see `signUp`.
+ */
+export type SignUpOutcome = 'complete' | 'confirmation-required';
+
 type AuthContextValue = AuthState & {
   /**
    * Claims the anonymous account for an email and password. The user id does
    * not change, so anything already tied to it (rows tagged with user_id)
    * simply becomes theirs — nothing needs to be copied or migrated.
+   *
+   * Returns `'confirmation-required'` when the project makes users confirm
+   * their address, in which case the account is only half claimed until
+   * `confirmSignUp` runs with the emailed code.
    */
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<SignUpOutcome>;
+  /** Finishes a `signUp` that returned `'confirmation-required'`. */
+  confirmSignUp: (email: string, code: string, password: string) => Promise<void>;
   /** Swaps to an existing account. If you keep data scoped to the anonymous
    * user_id that should survive a sign-in, migrate it server-side (e.g. in a
    * Postgres function) before or during this call — see the README. */
@@ -50,11 +63,16 @@ function friendlyMessage(raw: string): string {
   if (message.includes('email not confirmed')) {
     return 'This account has not been confirmed yet. Check your email.';
   }
-  if (message.includes('token has expired') || message.includes('expired')) {
-    return 'That code has expired. Send yourself a new one.';
+  // Reached when a password is set before the address it belongs to is
+  // confirmed — the two halves of sign-up ran out of order.
+  if (message.includes('anonymous user without an email')) {
+    return 'Confirm your email address before choosing a password.';
   }
-  if (message.includes('invalid') && message.includes('token')) {
-    return 'That code is not right. Check the email and try again.';
+  // Supabase answers a wrong code and a stale one with the same string,
+  // "Token has expired or is invalid", so this cannot honestly tell the user
+  // which of the two it was.
+  if (message.includes('expired') || (message.includes('invalid') && message.includes('token'))) {
+    return 'That code is not right, or it has expired. Send yourself a new one.';
   }
   if (
     message.includes('already registered') ||
@@ -161,12 +179,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   const signUp = useCallback(
-    async (email: string, password: string) => {
-      // Order matters: Supabase rejects a password on an account that has no
-      // address yet. With email confirmation turned off the address attaches
-      // immediately, so the password can follow in the same breath.
-      const { error: emailError } = await supabase.auth.updateUser({ email });
+    async (email: string, password: string): Promise<SignUpOutcome> => {
+      // Order matters: Supabase rejects a password on an anonymous account
+      // that has no address yet ("Updating password of an anonymous user
+      // without an email or phone is not allowed").
+      const { data, error: emailError } = await supabase.auth.updateUser({ email });
       if (emailError) fail(emailError.message);
+
+      // Whether that address attached just now is the project's call, not
+      // ours: with "Confirm email" off it lands immediately, with it on (the
+      // Supabase default) it sits in `new_email` until the user proves they
+      // own it, and `email` stays empty. The password is refused for exactly
+      // as long as that is true, so hand the rest to `confirmSignUp`.
+      if (!data.user?.email) return 'confirmation-required';
+
+      const { error: passwordError } = await supabase.auth.updateUser({ password });
+      if (passwordError) fail(passwordError.message);
+      return 'complete';
+    },
+    [supabase],
+  );
+
+  /**
+   * The confirmed half of `signUp`: verifying the code attaches the address,
+   * which is what finally makes the account non-anonymous and the password
+   * legal to set.
+   *
+   * The password cannot ride along on the emailed link, which is why this
+   * takes a typed code and why the project's "Change Email Address" template
+   * has to include `{{ .Token }}` — the stock template sends only
+   * `{{ .ConfirmationURL }}`. Same requirement `resetPassword` already has.
+   */
+  const confirmSignUp = useCallback(
+    async (email: string, code: string, password: string) => {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'email_change',
+      });
+      if (verifyError) fail(verifyError.message);
 
       const { error: passwordError } = await supabase.auth.updateUser({ password });
       if (passwordError) fail(passwordError.message);
@@ -224,13 +275,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ...state,
       signUp,
+      confirmSignUp,
       signIn,
       requestPasswordReset,
       resetPassword,
       signOut,
       retry,
     }),
-    [state, signUp, signIn, requestPasswordReset, resetPassword, signOut, retry],
+    [state, signUp, confirmSignUp, signIn, requestPasswordReset, resetPassword, signOut, retry],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
