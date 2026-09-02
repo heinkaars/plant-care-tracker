@@ -149,7 +149,7 @@ says nothing about it. See also item 20.
 
 ### 5. A plant added before the session exists is silently discarded
 
-**Status:** Open
+**Status:** Fixed — 2026-09-02
 
 No page waits for the auth bootstrap. [app/page.tsx:16](app/page.tsx#L16),
 [app/plants/page.tsx:25](app/plants/page.tsx#L25) and

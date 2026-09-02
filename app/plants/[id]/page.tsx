@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { storage } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 import { getCareStatus, getCurrentFrequency } from '@/lib/careStatus';
 import { Plant, CareType } from '@/types/plant';
 import { format, parseISO } from 'date-fns';
@@ -11,11 +12,16 @@ import { getCurrentSeason, getSeasonDisplay } from '@/lib/seasonUtils';
 
 export default function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { ready, userId, error: authError, retry } = useAuth();
   const [plant, setPlant] = useState<Plant | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Wait for the auth bootstrap to produce a session before reading —
+  // otherwise this races signInAnonymously and RLS just returns zero rows,
+  // which would look identical to "plant not found" and bounce to /plants.
   useEffect(() => {
+    if (!ready || !userId) return;
     let cancelled = false;
     storage.getPlant(id).then((loadedPlant) => {
       if (cancelled) return;
@@ -29,7 +35,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
     return () => {
       cancelled = true;
     };
-  }, [id, router]);
+  }, [id, router, ready, userId]);
 
   const handleCareEvent = async (careType: CareType) => {
     const notes = prompt(`Add notes for ${careType} (optional):`);
@@ -44,7 +50,21 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  if (loading || !plant) {
+  if (authError) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-4 text-center">
+        <p className="text-red-700">{authError}</p>
+        <button
+          onClick={retry}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (!ready || loading || !plant) {
     return <div className="text-center py-12">Loading...</div>;
   }
 

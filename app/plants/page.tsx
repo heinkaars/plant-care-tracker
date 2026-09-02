@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { storage } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 import { getPlantStatus } from '@/lib/careStatus';
 import { Plant } from '@/types/plant';
 import AddPlantModal from '@/components/AddPlantModal';
 
 export default function PlantsPage() {
+  const { ready, userId, error, retry } = useAuth();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -15,13 +17,19 @@ export default function PlantsPage() {
 
   // Check URL params
   useEffect(() => {
-    let cancelled = false;
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('add') === 'true') {
       setShowAddModal(true);
       // Clean up URL
       window.history.replaceState({}, '', '/plants');
     }
+  }, []);
+
+  // Wait for the auth bootstrap to produce a session before reading —
+  // otherwise this races signInAnonymously and RLS just returns zero rows.
+  useEffect(() => {
+    if (!ready || !userId) return;
+    let cancelled = false;
     storage.getPlants().then((loaded) => {
       if (!cancelled) {
         setPlants(loaded);
@@ -31,12 +39,16 @@ export default function PlantsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ready, userId]);
 
-  const handlePlantAdded = async (plant: Plant) => {
-    await storage.addPlant(plant);
+  // Returns whether the save succeeded so AddPlantModal can keep itself
+  // open and show the failure instead of closing as though it had worked.
+  const handlePlantAdded = async (plant: Plant): Promise<boolean> => {
+    const added = await storage.addPlant(plant);
+    if (!added) return false;
     setPlants(await storage.getPlants());
     setShowAddModal(false);
+    return true;
   };
 
   const handleDeletePlant = async (id: string) => {
@@ -46,7 +58,21 @@ export default function PlantsPage() {
     }
   };
 
-  if (loading) {
+  if (error) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-4 text-center">
+        <p className="text-red-700">{error}</p>
+        <button
+          onClick={retry}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (!ready || loading) {
     return <div className="text-center py-12">Loading...</div>;
   }
 

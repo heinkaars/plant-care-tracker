@@ -3,15 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { storage } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 import { getDashboardStats, getUpcomingCare } from '@/lib/careStatus';
 import { Plant } from '@/types/plant';
 import { format, parseISO } from 'date-fns';
 
 export default function Dashboard() {
+  const { ready, userId, error, retry } = useAuth();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Wait for the auth bootstrap to produce a session before reading —
+  // otherwise this races signInAnonymously and RLS just returns zero rows.
   useEffect(() => {
+    if (!ready || !userId) return;
     let cancelled = false;
     storage.getPlants().then((loaded) => {
       if (!cancelled) {
@@ -22,9 +27,23 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ready, userId]);
 
-  if (loading) {
+  if (error) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-4 text-center">
+        <p className="text-red-700">{error}</p>
+        <button
+          onClick={retry}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (!ready || loading) {
     return <div className="text-center py-12">Loading...</div>;
   }
 

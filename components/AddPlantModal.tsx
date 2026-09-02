@@ -7,7 +7,9 @@ import { getCurrentFrequency } from '@/lib/careStatus';
 
 interface AddPlantModalProps {
   onClose: () => void;
-  onPlantAdded: (plant: Plant) => void;
+  /** Returns whether the save succeeded, so a failure can be shown here
+   * instead of the modal closing as though it had worked. */
+  onPlantAdded: (plant: Plant) => Promise<boolean>;
 }
 
 type InputMethod = 'manual' | 'search' | 'camera';
@@ -159,7 +161,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
     return schedule;
   };
 
-  const createPlant = (data: PlantFormData) => {
+  const createPlant = async (data: PlantFormData) => {
     const now = new Date().toISOString();
     const plant: Plant = {
       id: `${Date.now()}-${Math.random()}`,
@@ -176,7 +178,13 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       careHistory: [],
     };
 
-    onPlantAdded(plant);
+    setLoading(true);
+    setError('');
+    const saved = await onPlantAdded(plant);
+    setLoading(false);
+    if (!saved) {
+      setError('Could not save this plant. Check your connection and try again.');
+    }
   };
 
   return (
