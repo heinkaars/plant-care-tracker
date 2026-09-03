@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CareSchedule, CareType, Plant, PlantFormData, SeasonalFrequency } from '@/types/plant';
 import { addDays } from 'date-fns';
 import { getCurrentFrequency } from '@/lib/careStatus';
+import { compressImageFile } from '@/lib/image';
 
 interface AddPlantModalProps {
   onClose: () => void;
@@ -94,47 +95,45 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
     setError('');
 
     try {
-      // Convert image to base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Image = reader.result as string;
+      // Downscale before it ever leaves the browser — a raw phone photo can
+      // run 5-10 MB, and nothing downstream (the OpenAI request, the stored
+      // row, the plant grid) needs more than a preview-sized JPEG.
+      const compressedImage = await compressImageFile(file);
 
-        const response = await fetch('/api/identify-plant', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64Image }),
-        });
+      const response = await fetch('/api/identify-plant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: compressedImage }),
+      });
 
-        if (!response.ok) {
-          throw new Error('Failed to identify plant');
-        }
+      if (!response.ok) {
+        throw new Error('Failed to identify plant');
+      }
 
-        const data = await response.json();
+      const data = await response.json();
 
-        // Pre-fill form with AI results (seasonal data)
-        setFormData({
-          name: data.name || 'Unknown Plant',
-          scientificName: data.scientificName || '',
-          photo: base64Image,
-          // Use summer frequency as default display
-          wateringFrequency: data.watering?.summer || 7,
-          fertilizingFrequency: data.fertilizing?.summer || 30,
-          repottingFrequency: data.repotting?.summer || 365,
-          // Store seasonal data
-          wateringSeasonal: data.watering,
-          fertilizingSeasonal: data.fertilizing,
-          repottingSeasonal: data.repotting,
-          notes: data.careNotes || '',
-        });
+      // Pre-fill form with AI results (seasonal data)
+      setFormData({
+        name: data.name || 'Unknown Plant',
+        scientificName: data.scientificName || '',
+        photo: compressedImage,
+        // Use summer frequency as default display
+        wateringFrequency: data.watering?.summer || 7,
+        fertilizingFrequency: data.fertilizing?.summer || 30,
+        repottingFrequency: data.repotting?.summer || 365,
+        // Store seasonal data
+        wateringSeasonal: data.watering,
+        fertilizingSeasonal: data.fertilizing,
+        repottingSeasonal: data.repotting,
+        notes: data.careNotes || '',
+      });
 
-        // Switch to manual mode to review/edit
-        setInputMethod('manual');
-        setLoading(false);
-      };
-      reader.readAsDataURL(file);
+      // Switch to manual mode to review/edit
+      setInputMethod('manual');
     } catch (err) {
       setError('Failed to identify plant. Please check your API key in .env.local');
       console.error(err);
+    } finally {
       setLoading(false);
     }
   };

@@ -168,7 +168,36 @@ failed insert to the user.
 
 ### 6. Photo uploads are unbounded
 
-**Status:** Open
+**Status:** Fixed — 2026-09-03
+
+Of the four fixes this item called for, two landed today; two remain and are
+tracked as item 29 (they need a real Supabase Storage bucket to build against
+and verify, which this environment doesn't have credentials for — see item 29
+for why that's a separate step rather than more of this one).
+
+Landed:
+
+- [components/AddPlantModal.tsx](components/AddPlantModal.tsx) no longer reads
+  the camera file straight to base64. `lib/image.ts` (new) downscales it
+  client-side via canvas to a max 1024px edge, JPEG quality 0.82, before it's
+  used for either the OpenAI Vision request or the stored `photo` field. A
+  5–10 MB phone photo now becomes a few hundred KB before it leaves the
+  browser, which shrinks the OpenAI payload, the Postgres row, and what the
+  grid has to pull, without touching the storage layer itself.
+- [app/api/identify-plant/route.ts](app/api/identify-plant/route.ts) now
+  rejects any request over 8 MB (`content-length` check) with a 413 before
+  parsing the body — a backstop for a caller that skips client-side
+  compression, since Route Handlers have no default body-size limit and the
+  rate limiter in `lib/api-guard.ts` caps call count, not payload size.
+
+Incidentally fixed in the same edit: `handleCameraCapture`'s try/catch never
+actually caught anything, because the code that could throw ran inside
+`reader.onloadend`, an async callback invoked after the `try` block had
+already returned — an error there became an unhandled rejection instead of
+hitting `catch`. Moving to `compressImageFile` (an awaited promise) put the
+throwing code back inside the `try`.
+
+Original text, for reference:
 
 [components/AddPlantModal.tsx:86](components/AddPlantModal.tsx#L86) reads the
 camera file straight to base64 — no size check, no resize, no compression —
@@ -181,10 +210,10 @@ per-request OpenAI cost. App Router route handlers have no default body-size
 limit, so `/api/identify-plant` will forward an arbitrarily large image on
 your key — the rate limiter in `lib/api-guard.ts` caps call count, not payload.
 
-- Resize/compress client-side to a sane max edge before upload.
-- Move photos to Supabase Storage and keep a URL in the row.
-- Select explicit columns in list views so photos aren't fetched for the grid.
-- Reject oversized bodies at the route boundary.
+- Resize/compress client-side to a sane max edge before upload. — done above.
+- Move photos to Supabase Storage and keep a URL in the row. — item 29.
+- Select explicit columns in list views so photos aren't fetched for the grid. — item 29.
+- Reject oversized bodies at the route boundary. — done above.
 
 ---
 
@@ -482,6 +511,43 @@ still there under the now-permanent account (same user id, nothing migrated)
 One incidental finding: a second `updateUser({ email })` for the same address
 invalidates the first mail's token, so during testing an older link reports
 `otp_expired`. Check the timestamp before concluding a link is broken.
+
+### 29. Photos still live in a Postgres `text` column, not Supabase Storage
+
+**Priority:** P0
+**Status:** Open
+
+Split out of item 6, which closed today with the client-side-compression and
+request-size-limit half of the fix. This is the other half: photos are still
+stored as base64 in `plants.photo`
+([supabase/schema.sql:16](supabase/schema.sql#L16)) rather than as a URL to a
+Supabase Storage object, and `storage.getPlants`
+([lib/storage.ts:45](lib/storage.ts#L45)) still does `select('*')`, so every
+list-view query pulls every photo to render the grid — compression shrinks
+the bytes involved but doesn't change either of those facts.
+
+Not something to do same-day as item 6: it means creating a real Storage
+bucket (via the dashboard or a `storage.buckets` insert in a migration) with
+its own RLS policies scoping objects to the uploading user, rewriting
+`addPlant`/`updatePlant` to upload the file and store the returned URL
+instead of the data URL, backfilling or discarding existing base64 photos in
+the one live project, and then actually verifying an upload/read/delete round
+trip against that bucket — none of which this sandboxed run can do without
+live Supabase credentials (no `.env.local` here; see item 1 for how those get
+provisioned). Once photos are in Storage, "select explicit columns in list
+views" becomes real: the grid can select just the URL column and let
+`next/image` (see item 19, which is the same underlying gap) lazy-load a
+resized version instead of shipping the blob through Postgres on every list
+fetch.
+
+- Create the bucket + RLS policies (owner-scoped, same pattern as
+  `plants` — see `supabase/schema.sql`).
+- `addPlant`/`updatePlant` upload to Storage, store the URL.
+- `getPlants`/`getPlant` select explicit columns; drop `photo` from the list
+  query, keep it only where a single plant's detail view needs it.
+- Decide what to do with photos already sitting in the `photo` column from
+  before this migration (backfill into Storage, or accept they stay as
+  legacy data URLs).
 
 ### 27. Sign-out had never been run against the live project
 

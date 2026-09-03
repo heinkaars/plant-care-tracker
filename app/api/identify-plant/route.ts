@@ -6,10 +6,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Route Handlers have no default body-size limit, so an unbounded request
+// would otherwise forward straight to OpenAI on this key. Client-side
+// compression (lib/image.ts) keeps a normal upload well under this; it's a
+// backstop against a caller that skips it, not the primary size control.
+const MAX_IMAGE_BODY_BYTES = 8 * 1024 * 1024;
+
 export async function POST(request: NextRequest) {
   // Verified session + per-user / per-IP rate limit (see lib/api-guard.ts).
   const guardResult = await guard(request, 'identify-plant', 10, 30);
   if (guardResult.response) return guardResult.response;
+
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_IMAGE_BODY_BYTES) {
+    return NextResponse.json({ error: 'Image is too large' }, { status: 413 });
+  }
 
   try {
     const { image } = await request.json();
