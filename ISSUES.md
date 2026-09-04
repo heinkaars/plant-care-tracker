@@ -221,7 +221,7 @@ your key — the rate limiter in `lib/api-guard.ts` caps call count, not payload
 
 ### 7. Storage failures are invisible to the user
 
-**Status:** Open
+**Status:** Fixed — 2026-09-04
 
 Every method in [lib/storage.ts](lib/storage.ts) swallows its error into a
 `console.error` and returns an empty or `undefined` value
@@ -237,6 +237,31 @@ event sets `plant` to `undefined` and pins the page on "Loading..." forever.
 
 Return errors to callers and render an error state distinct from the empty
 state.
+
+**Resolved.** `lib/storage.ts` no longer swallows a Supabase error into
+`console.error` plus an empty/`undefined` return — every method now logs and
+then throws a friendly `Error` (a new `fail()` helper), the same
+throw-and-catch shape `lib/auth-context.tsx` already used for auth errors.
+`getPlant` still returns `undefined` for a genuine not-found (`data` null,
+no `error`), so "not found" and "failed to load" stay distinguishable.
+
+All three pages that call `storage` (`app/page.tsx`, `app/plants/page.tsx`,
+`app/plants/[id]/page.tsx`) now catch the initial load and render a
+`loadError` state — the same red-box-plus-"Try again" pattern already used
+for the `useAuth` `error` — instead of falling through to the "No plants
+yet!" empty state. "Try again" re-runs the fetch via a `reloadIndex` state
+bump, since `ready`/`userId` don't change on their own.
+
+Mutations get feedback too: `app/plants/page.tsx`'s delete and
+`app/plants/[id]/page.tsx`'s delete/care-event handlers catch the throw and
+show a dismissible `actionError` banner instead of failing silently.
+`handlePlantAdded` catches `addPlant`'s throw and returns `false`, which
+`AddPlantModal` already rendered a message for — no change needed there.
+
+Fixed the `getPlant(id)!` non-null assertion in the same edit: the care-event
+handler now only calls `setPlant` when the refetch actually returns a plant,
+and reports failure via `actionError` otherwise instead of pinning the page
+on "Loading..." forever.
 
 ### 8. No ESLint configuration exists
 

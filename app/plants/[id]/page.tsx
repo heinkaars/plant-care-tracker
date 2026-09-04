@@ -15,6 +15,9 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const { ready, userId, error: authError, retry } = useAuth();
   const [plant, setPlant] = useState<Plant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reloadIndex, setReloadIndex] = useState(0);
   const router = useRouter();
 
   // Wait for the auth bootstrap to produce a session before reading —
@@ -23,30 +26,48 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (!ready || !userId) return;
     let cancelled = false;
-    storage.getPlant(id).then((loadedPlant) => {
-      if (cancelled) return;
-      if (!loadedPlant) {
-        router.push('/plants');
-        return;
-      }
-      setPlant(loadedPlant);
-      setLoading(false);
-    });
+    setLoading(true);
+    setLoadError(null);
+    storage
+      .getPlant(id)
+      .then((loadedPlant) => {
+        if (cancelled) return;
+        if (!loadedPlant) {
+          router.push('/plants');
+          return;
+        }
+        setPlant(loadedPlant);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load that plant.');
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [id, router, ready, userId]);
+  }, [id, router, ready, userId, reloadIndex]);
 
   const handleCareEvent = async (careType: CareType) => {
     const notes = prompt(`Add notes for ${careType} (optional):`);
-    await storage.addCareEvent(id, careType, notes || undefined);
-    setPlant((await storage.getPlant(id))!);
+    try {
+      await storage.addCareEvent(id, careType, notes || undefined);
+      const refreshed = await storage.getPlant(id);
+      if (refreshed) setPlant(refreshed);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not save that care event.');
+    }
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this plant?')) {
+    if (!confirm('Are you sure you want to delete this plant?')) return;
+    try {
       await storage.deletePlant(id);
       router.push('/plants');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete that plant.');
     }
   };
 
@@ -56,6 +77,20 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         <p className="text-red-700">{authError}</p>
         <button
           onClick={retry}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-4 text-center">
+        <p className="text-red-700">{loadError}</p>
+        <button
+          onClick={() => setReloadIndex((n) => n + 1)}
           className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
         >
           Try again
@@ -103,6 +138,14 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex justify-between items-center">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-700 hover:text-red-900 font-medium">
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center space-x-4">
         <Link href="/plants" className="text-gray-600 hover:text-gray-900">

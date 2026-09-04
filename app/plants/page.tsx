@@ -12,6 +12,9 @@ export default function PlantsPage() {
   const { ready, userId, error, retry } = useAuth();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadIndex, setReloadIndex] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -30,31 +33,47 @@ export default function PlantsPage() {
   useEffect(() => {
     if (!ready || !userId) return;
     let cancelled = false;
-    storage.getPlants().then((loaded) => {
-      if (!cancelled) {
-        setPlants(loaded);
-        setLoading(false);
-      }
-    });
+    setLoading(true);
+    setLoadError(null);
+    storage
+      .getPlants()
+      .then((loaded) => {
+        if (!cancelled) {
+          setPlants(loaded);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load your plants.');
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [ready, userId]);
+  }, [ready, userId, reloadIndex]);
 
   // Returns whether the save succeeded so AddPlantModal can keep itself
   // open and show the failure instead of closing as though it had worked.
   const handlePlantAdded = async (plant: Plant): Promise<boolean> => {
-    const added = await storage.addPlant(plant);
-    if (!added) return false;
-    setPlants(await storage.getPlants());
-    setShowAddModal(false);
-    return true;
+    try {
+      await storage.addPlant(plant);
+      setPlants(await storage.getPlants());
+      setShowAddModal(false);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const handleDeletePlant = async (id: string) => {
-    if (confirm('Are you sure you want to delete this plant?')) {
+    if (!confirm('Are you sure you want to delete this plant?')) return;
+    try {
       await storage.deletePlant(id);
       setPlants(await storage.getPlants());
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete that plant.');
     }
   };
 
@@ -64,6 +83,20 @@ export default function PlantsPage() {
         <p className="text-red-700">{error}</p>
         <button
           onClick={retry}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-4 text-center">
+        <p className="text-red-700">{loadError}</p>
+        <button
+          onClick={() => setReloadIndex((n) => n + 1)}
           className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
         >
           Try again
@@ -100,6 +133,14 @@ export default function PlantsPage() {
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex justify-between items-center">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-700 hover:text-red-900 font-medium">
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">My Plants</h1>
         <div className="flex items-center space-x-4">

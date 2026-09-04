@@ -12,22 +12,34 @@ export default function Dashboard() {
   const { ready, userId, error, retry } = useAuth();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadIndex, setReloadIndex] = useState(0);
 
   // Wait for the auth bootstrap to produce a session before reading —
   // otherwise this races signInAnonymously and RLS just returns zero rows.
   useEffect(() => {
     if (!ready || !userId) return;
     let cancelled = false;
-    storage.getPlants().then((loaded) => {
-      if (!cancelled) {
-        setPlants(loaded);
-        setLoading(false);
-      }
-    });
+    setLoading(true);
+    setLoadError(null);
+    storage
+      .getPlants()
+      .then((loaded) => {
+        if (!cancelled) {
+          setPlants(loaded);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load your plants.');
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [ready, userId]);
+  }, [ready, userId, reloadIndex]);
 
   if (error) {
     return (
@@ -35,6 +47,20 @@ export default function Dashboard() {
         <p className="text-red-700">{error}</p>
         <button
           onClick={retry}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-4 text-center">
+        <p className="text-red-700">{loadError}</p>
+        <button
+          onClick={() => setReloadIndex((n) => n + 1)}
           className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
         >
           Try again

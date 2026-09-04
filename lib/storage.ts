@@ -27,6 +27,18 @@ type PlantRow = {
   date_added: string;
 };
 
+/**
+ * Every method below used to swallow its Supabase error into a
+ * `console.error` and return an empty/`undefined` value, which made a
+ * network blip on the dashboard indistinguishable from a genuinely empty
+ * collection, and left failed deletes/updates with no feedback at all.
+ * Throwing here — after logging, for debugging — lets callers catch it and
+ * render an explicit error state instead of a silent empty one.
+ */
+function fail(message: string): never {
+  throw new Error(message);
+}
+
 function fromRow(row: PlantRow): Plant {
   return {
     id: row.id,
@@ -51,7 +63,7 @@ export const storage = {
 
     if (error) {
       console.error('Error reading plants:', error);
-      return [];
+      fail('Could not load your plants. Check your connection and try again.');
     }
     return (data as PlantRow[]).map(fromRow);
   },
@@ -63,22 +75,24 @@ export const storage = {
 
     if (error) {
       console.error('Error reading plant:', error);
-      return undefined;
+      fail('Could not load that plant. Check your connection and try again.');
     }
+    // `data` is genuinely null (not found) rather than an error here —
+    // that case is left to the caller to treat as "no such plant".
     return data ? fromRow(data as PlantRow) : undefined;
   },
 
   // Add a new plant. Supabase generates the id — pass a Plant without a
   // real id (AddPlantModal's client-side placeholder id is ignored) and use
   // the returned row for the real one.
-  addPlant: async (plant: Plant): Promise<Plant | undefined> => {
+  addPlant: async (plant: Plant): Promise<Plant> => {
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
       console.error('Cannot add plant: no signed-in user');
-      return undefined;
+      fail('You need to be signed in to add a plant.');
     }
 
     const { data, error } = await supabase
@@ -98,7 +112,7 @@ export const storage = {
 
     if (error) {
       console.error('Error adding plant:', error);
-      return undefined;
+      fail('Could not save that plant. Check your connection and try again.');
     }
     return fromRow(data as PlantRow);
   },
@@ -118,14 +132,20 @@ export const storage = {
       })
       .eq('id', id);
 
-    if (error) console.error('Error updating plant:', error);
+    if (error) {
+      console.error('Error updating plant:', error);
+      fail('Could not update that plant. Check your connection and try again.');
+    }
   },
 
   // Delete a plant
   deletePlant: async (id: string): Promise<void> => {
     const supabase = createClient();
     const { error } = await supabase.from('plants').delete().eq('id', id);
-    if (error) console.error('Error deleting plant:', error);
+    if (error) {
+      console.error('Error deleting plant:', error);
+      fail('Could not delete that plant. Check your connection and try again.');
+    }
   },
 
   // Add care event to a plant
