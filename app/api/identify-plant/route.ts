@@ -99,7 +99,7 @@ If you cannot identify the plant with confidence, use "Unknown Plant" as the nam
     let plantData;
     try {
       plantData = JSON.parse(responseText);
-    } catch (parseError) {
+    } catch {
       // If parsing fails, try to extract JSON from the response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {

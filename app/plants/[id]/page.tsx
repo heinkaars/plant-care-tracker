@@ -295,7 +295,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
             <div className="divide-y divide-gray-200">
               {plant.careHistory.length === 0 ? (
                 <div className="px-6 py-12 text-center text-gray-500">
-                  No care history yet. Mark care events to track your plant's health!
+                  No care history yet. Mark care events to track your plant&apos;s health!
                 </div>
               ) : (
                 plant.careHistory.map((event) => (

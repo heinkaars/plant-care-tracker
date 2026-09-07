@@ -1,5 +1,5 @@
 import { Plant, CareSchedule } from '@/types/plant';
-import { parseISO, differenceInDays, isPast, addDays } from 'date-fns';
+import { parseISO, differenceInDays, isPast } from 'date-fns';
 import { getSeasonalFrequency } from '@/lib/seasonUtils';
 
 export type CareStatus = 'overdue' | 'due-soon' | 'ok';

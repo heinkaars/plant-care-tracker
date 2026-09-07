@@ -245,7 +245,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Describe the plant you're looking for
+                  Describe the plant you&apos;re looking for
                 </label>
                 <input
                   type="text"
