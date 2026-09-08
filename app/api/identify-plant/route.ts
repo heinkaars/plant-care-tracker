@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { guard } from '@/lib/api-guard';
+import { plantAiResponseSchema } from '@/lib/plantAiSchema';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -109,7 +111,16 @@ If you cannot identify the plant with confidence, use "Unknown Plant" as the nam
       }
     }
 
-    return NextResponse.json(plantData);
+    const validated = plantAiResponseSchema.safeParse(plantData);
+    if (!validated.success) {
+      console.error('AI response failed schema validation:', validated.error.flatten());
+      return NextResponse.json(
+        { error: 'Received an unexpected response from the AI. Please try again.' },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json(validated.data);
   } catch (error) {
     console.error('Error identifying plant:', error);
     return NextResponse.json(

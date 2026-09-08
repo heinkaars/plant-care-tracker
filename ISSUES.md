@@ -316,7 +316,7 @@ end-to-end. Verified with
 
 ### 9. AI responses are parsed but never validated, and use a legacy model
 
-**Status:** Open
+**Status:** Fixed — 2026-09-08
 
 Both routes `JSON.parse` the model's output and trust its shape completely
 ([search-plant:82](app/api/search-plant/route.ts#L82),
@@ -335,6 +335,30 @@ the vision route already uses.
 - Validate against a schema (zod) at the route boundary and return a 502 on a
   malformed model response.
 - Move `search-plant` off `gpt-4`.
+
+**Resolved.** Added `zod` as a dependency and a shared
+[lib/plantAiSchema.ts](lib/plantAiSchema.ts) — `plantAiResponseSchema` —
+describing the exact shape both prompts already ask for (`name`,
+`scientificName`, `watering`/`fertilizing`/`repotting` as
+`{spring, summer, fall, winter}` of numbers, `careNotes`). Both routes now
+run the parsed JSON through `plantAiResponseSchema.safeParse` after the
+existing parse-then-regex-fallback step, and return a 502 with a generic
+"unexpected response from the AI" message (not the raw zod error) when it
+fails, instead of forwarding an unvalidated shape into `PlantFormData`.
+
+Both routes also now pass `response_format: { type: 'json_object' }`, and
+`search-plant` moved from `model: 'gpt-4'` to `gpt-4o`, matching
+`identify-plant` — `gpt-4` predates OpenAI's JSON mode support, so this had
+to move together with adding `response_format` rather than as a separate
+step.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged (same 5
+pre-existing `no-img-element` warnings, item 19), `npm run build` succeeds
+with dummy env vars. Not exercised against the live OpenAI API in this
+sandboxed run (no network credentials here) — the schema mirrors the
+existing prompts' documented format exactly, so a well-formed model response
+parses unchanged; only a malformed one now gets caught instead of flowing
+through.
 
 ### 10. `addCareEvent` is a read-modify-write of the whole row
 
