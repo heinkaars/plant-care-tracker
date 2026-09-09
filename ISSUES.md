@@ -362,7 +362,7 @@ through.
 
 ### 10. `addCareEvent` is a read-modify-write of the whole row
 
-**Status:** Open
+**Status:** Fixed — 2026-09-09
 
 [lib/storage.ts:132](lib/storage.ts#L132) fetches the plant, mutates the
 history and schedule in JS, then writes every column back — photo included.
@@ -371,6 +371,27 @@ care event round-trips the full base64 photo in both directions.
 
 Move the mutation into a Postgres function, or at minimum update only the
 `care_schedules` and `care_history` columns.
+
+**Resolved — the "at minimum" half.** Added `storage.updateCareData(id,
+careSchedules, careHistory)` in [lib/storage.ts](lib/storage.ts), a Supabase
+`update` that sends only those two columns. `addCareEvent` now calls it
+instead of `updatePlant`, so a care check-in no longer round-trips
+`name`/`photo`/`notes` — the base64 `photo` column in particular, since item
+29 (moving photos to Storage) hasn't landed yet. `updatePlant` itself is
+untouched and stays the full-row update, since it's the natural fit for the
+edit UI item 12 still needs to build.
+
+Went with the minimal fix rather than a Postgres function: the real fix for
+the two-tabs race needs the season-frequency logic
+([lib/seasonUtils.ts](lib/seasonUtils.ts)) duplicated into SQL so the next
+due date can be computed atomically inside the function, and verifying that
+against a live project needs Supabase credentials this sandboxed run doesn't
+have (same constraint as item 29) — safer to land the bandwidth fix now and
+track the atomic version separately. See item 30.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged (same 5
+pre-existing `no-img-element` warnings), `npm run build` succeeds with dummy
+env vars. Not exercised against a live Supabase project in this run.
 
 ### 11. Password reset is implemented but unreachable
 
@@ -635,6 +656,33 @@ fetch.
 - Decide what to do with photos already sitting in the `photo` column from
   before this migration (backfill into Storage, or accept they stay as
   legacy data URLs).
+
+### 30. `addCareEvent` is still a client-side read-modify-write, so two tabs can still lose an event
+
+**Priority:** P1
+**Status:** Open
+
+Split out of item 10, which closed today with the bandwidth half of the fix
+(`storage.updateCareData` now writes only `care_schedules`/`care_history`,
+not the whole row). The race item 10 originally called out is still there:
+`addCareEvent` ([lib/storage.ts:152](lib/storage.ts#L152)) still fetches the
+plant, mutates history/schedule in JS, then writes those two columns back —
+two tabs marking care on the same plant at nearly the same time can still
+overwrite one event with the other, since neither write is conditioned on
+what the other read.
+
+Fixing it for real means a Postgres function (`security invoker`, so RLS
+still scopes it to `auth.uid()`, matching the pattern in
+[supabase/schema.sql](supabase/schema.sql)'s `claim_api_budget`) that appends
+to `care_history` and updates the matching `care_schedules` entry atomically
+in one statement, rather than in JS between a read and a write. That means
+porting the season/frequency-selection logic in
+[lib/seasonUtils.ts](lib/seasonUtils.ts) into SQL (or having the function
+take the already-resolved frequency as an argument, computed client-side,
+and only do the atomic append/update in SQL) — and either way, verifying it
+against a live project, which this sandboxed run has no Supabase credentials
+for (same blocker as item 29; see item 1 for how those get provisioned in a
+run that has them).
 
 ### 27. Sign-out had never been run against the live project
 

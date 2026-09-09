@@ -138,6 +138,31 @@ export const storage = {
     }
   },
 
+  // Update just the care schedule/history columns — used by addCareEvent so
+  // a check-in doesn't round-trip name/photo/notes on every write (the
+  // photo especially, since it's still a base64 string in this column; see
+  // ISSUES.md #29). `updatePlant` above stays the full-row update for a
+  // future edit UI (ISSUES.md #12).
+  updateCareData: async (
+    id: string,
+    careSchedules: Plant['careSchedules'],
+    careHistory: Plant['careHistory']
+  ): Promise<void> => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('plants')
+      .update({
+        care_schedules: careSchedules,
+        care_history: careHistory,
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating care data:', error);
+      fail('Could not save that care update. Check your connection and try again.');
+    }
+  },
+
   // Delete a plant
   deletePlant: async (id: string): Promise<void> => {
     const supabase = createClient();
@@ -175,6 +200,6 @@ export const storage = {
       schedule.nextDueDate = frequency === 0 ? null : addDays(parseISO(now), frequency).toISOString();
     }
 
-    await storage.updatePlant(plantId, plant);
+    await storage.updateCareData(plantId, plant.careSchedules, plant.careHistory);
   },
 };
