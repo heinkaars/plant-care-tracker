@@ -395,7 +395,7 @@ env vars. Not exercised against a live Supabase project in this run.
 
 ### 11. Password reset is implemented but unreachable
 
-**Status:** Open
+**Status:** Fixed — 2026-09-10
 
 `requestPasswordReset` and `resetPassword`
 ([lib/auth-context.tsx:185](lib/auth-context.tsx#L185)) are fully written and
@@ -404,6 +404,27 @@ exposed on the context, but no component calls them —
 sign-in. A user who forgets their password has no recovery path in the UI.
 
 Either wire a reset flow into `AuthForm` / `/account`, or drop the dead code.
+
+**Resolved.** Wired a reset flow into `AuthForm`, mirroring the existing
+two-step `sign-up`/`confirm` shape rather than inventing a new pattern:
+a `reset-request` mode collects the email and calls
+`requestPasswordReset`, then a `reset-confirm` mode collects the emailed
+code plus a new password and calls `resetPassword` in one step. A "Forgot
+password?" link on the sign-in screen enters the flow; on success it drops
+back to `sign-in` with a confirmation notice. `/account` needed no changes —
+it already just renders `<AuthForm />` when there's no `email`.
+
+Same unstated dependency item 26 hit for sign-up applies here too: the
+project's "Reset Password" email template must include `{{ .Token }}` for a
+code to exist to type, which is a Supabase dashboard setting, not something
+this change can verify from a sandboxed run with no live credentials. The
+code path is otherwise exactly symmetric with the already-verified
+sign-up/confirm flow.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged (same 5
+pre-existing `no-img-element` warnings), `npm run build` succeeds with dummy
+env vars. Not exercised against a live Supabase project in this run (no
+credentials in this environment).
 
 ### 12. No way to edit a plant
 
