@@ -1,5 +1,5 @@
 import { Plant, CareSchedule } from '@/types/plant';
-import { parseISO, differenceInDays, isPast } from 'date-fns';
+import { addDays, parseISO, differenceInDays, isPast } from 'date-fns';
 import { getSeasonalFrequency } from '@/lib/seasonUtils';
 
 export type CareStatus = 'overdue' | 'due-soon' | 'ok';
@@ -12,6 +12,20 @@ export function getCurrentFrequency(schedule: CareSchedule): number {
     return getSeasonalFrequency(schedule.seasonalFrequency);
   }
   return schedule.frequencyDays;
+}
+
+/**
+ * Recomputes nextDueDate for a schedule whose frequency just changed (e.g.
+ * from the edit-plant form) — same "0 means skip until the season turns"
+ * rule addCareEvent and AddPlantModal.buildSchedule already use, so an
+ * editing path can't reintroduce the item 2 / item 3 bugs. Counts forward
+ * from the last care date if there is one, otherwise from `fallbackDate`
+ * (the plant's dateAdded), matching how the initial due date is seeded.
+ */
+export function computeNextDueDate(schedule: CareSchedule, fallbackDate: string): string | null {
+  const baseDate = schedule.lastCareDate ?? fallbackDate;
+  const frequency = getCurrentFrequency(schedule);
+  return frequency === 0 ? null : addDays(parseISO(baseDate), frequency).toISOString();
 }
 
 export function getCareStatus(schedule: CareSchedule): CareStatus {

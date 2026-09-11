@@ -428,12 +428,39 @@ credentials in this environment).
 
 ### 12. No way to edit a plant
 
-**Status:** Open
+**Status:** Fixed — 2026-09-11
 
 The README advertises "Add, edit, and remove plants from your collection".
 There is no edit UI — `storage.updatePlant` exists but is only ever called
 internally by `addCareEvent`. Name, notes, photo, and frequencies are all
 fixed at creation, which is a problem given item 3 seeds them wrong.
+
+**Resolved.** Added [components/EditPlantModal.tsx](components/EditPlantModal.tsx),
+wired into the "Edit Plant" button on
+[app/plants/[id]/page.tsx](app/plants/[id]/page.tsx) next to "Delete Plant".
+Lets the user change name, scientific name, notes, photo (re-uploaded through
+the same `compressImageFile` client-side downscale `AddPlantModal` uses), and
+each care schedule's frequency — a single days input for a schedule with no
+`seasonalFrequency`, or four per-season inputs (mirroring the seasonal
+breakdown already shown in the detail view) for one that has it. Saving calls
+`storage.updatePlant`, reusing the existing full-row update method that was
+previously unreachable from the UI.
+
+Editing a frequency has to move `nextDueDate` with it, or the fix would just
+swap item 3's bug for a new one where the due date silently stops matching
+the displayed frequency. Added `computeNextDueDate(schedule, fallbackDate)`
+in [lib/careStatus.ts](lib/careStatus.ts), generalizing the same "count
+forward from `lastCareDate`, or from the fallback date if never cared for;
+0 means skip until the season turns" rule `addCareEvent` and
+`AddPlantModal.buildSchedule` already use, and call it for every schedule on
+save.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged aside from one
+new (expected) `no-img-element` warning for the modal's own photo preview —
+same pattern item 19 already tracks for every other plant photo `<img>` in
+the app — and `npm run build` succeeds with dummy env vars. Not exercised
+against a live Supabase project in this run (no credentials in this
+environment; same constraint noted on items 9–11).
 
 ### 13. No tests
 

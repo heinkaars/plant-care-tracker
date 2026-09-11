@@ -9,6 +9,7 @@ import { getCareStatus, getCurrentFrequency } from '@/lib/careStatus';
 import { Plant, CareType } from '@/types/plant';
 import { format, parseISO } from 'date-fns';
 import { getCurrentSeason, getSeasonDisplay } from '@/lib/seasonUtils';
+import EditPlantModal from '@/components/EditPlantModal';
 
 export default function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -18,6 +19,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadIndex, setReloadIndex] = useState(0);
+  const [showEditModal, setShowEditModal] = useState(false);
   const router = useRouter();
 
   // Wait for the auth bootstrap to produce a session before reading —
@@ -68,6 +70,20 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
       router.push('/plants');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not delete that plant.');
+    }
+  };
+
+  // Returns whether the save succeeded, so EditPlantModal can keep itself
+  // open and show the failure instead of closing as though it had worked
+  // (same contract as AddPlantModal.onPlantAdded).
+  const handlePlantEdited = async (updatedPlant: Plant): Promise<boolean> => {
+    try {
+      await storage.updatePlant(id, updatedPlant);
+      setPlant(updatedPlant);
+      setShowEditModal(false);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -186,8 +202,14 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                 </p>
               </div>
               <button
+                onClick={() => setShowEditModal(true)}
+                className="w-full mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+              >
+                Edit Plant
+              </button>
+              <button
                 onClick={handleDelete}
-                className="w-full mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+                className="w-full mt-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
               >
                 Delete Plant
               </button>
@@ -319,6 +341,14 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       </div>
+
+      {showEditModal && (
+        <EditPlantModal
+          plant={plant}
+          onClose={() => setShowEditModal(false)}
+          onSave={handlePlantEdited}
+        />
+      )}
     </div>
   );
 }
