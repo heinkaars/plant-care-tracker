@@ -464,13 +464,39 @@ environment; same constraint noted on items 9–11).
 
 ### 13. No tests
 
-**Status:** Open
+**Status:** Fixed — 2026-09-14
 
 [lib/careStatus.ts](lib/careStatus.ts) and [lib/seasonUtils.ts](lib/seasonUtils.ts)
 are pure, date-driven business logic — season boundaries, overdue vs. due-soon
 thresholds, dashboard aggregation. Cheap to unit test, easy to break silently.
 Start here; items 2 and 3 are both exactly the kind of bug a table-driven test
 over the four seasons would have caught.
+
+**Resolved — a real first slice, not the whole of "testing."** Added
+`vitest` (pinned to 2.1.9, since vitest 5's `@types/node` peer range —
+`^22 || >=24` — conflicts with this project's `@types/node: ^20`) plus
+[vitest.config.ts](vitest.config.ts), aliasing `@/*` the same way
+`tsconfig.json` already does so the test files can import with the app's
+normal paths. `npm run test` runs `vitest run`.
+
+[lib/seasonUtils.test.ts](lib/seasonUtils.test.ts) table-drives
+`getCurrentSeason` across all four season boundaries for both hemispheres
+(northern and southern — the `hemisphere` argument item 17 found unreachable
+from the app is still exercised directly here), plus `getSeasonalFrequency`
+and `getSeasonDisplay`.
+
+[lib/careStatus.test.ts](lib/careStatus.test.ts) covers `getCurrentFrequency`
+and `computeNextDueDate` (including the frequency-0 "skip until the season
+turns" rule items 2 and 12 depend on, and counting forward from
+`lastCareDate` vs. the fallback date), `getCareStatus`'s overdue/due-soon/ok
+thresholds at and around the 3-day boundary with the system clock pinned via
+`vi.setSystemTime`, and the aggregation in `getPlantStatus`,
+`getDashboardStats`, and `getUpcomingCare` (including its urgency sort).
+47 tests total, all passing.
+
+Deliberately scoped to these two files, per the item's own "Start here" —
+the rest of the codebase (API routes, `lib/storage.ts`, components) has no
+coverage yet. See item 31 for what's left.
 
 ### 14. Dependency vulnerabilities
 
@@ -760,3 +786,20 @@ invalid", so the first branch always won and the second was dead code — a
 freshly mistyped code told the user it had expired and to send a new one.
 Observed while testing item 26. Merged into one branch that does not claim to
 know which of the two it was.
+
+### 31. Test coverage stops at `lib/careStatus.ts` / `lib/seasonUtils.ts`
+
+**Priority:** P1
+**Status:** Open
+
+Split out of item 13, which closed today with a real vitest suite for the
+two pure date/business-logic modules it named as the starting point. Nothing
+else in the codebase has a test yet: `lib/storage.ts` (the `fail()`
+error-wrapping behavior from item 7, `updateCareData` vs. `updatePlant`),
+the zod validation added for item 9
+([lib/plantAiSchema.ts](lib/plantAiSchema.ts) and the two API routes'
+malformed-response handling), and `lib/auth-context.tsx`'s `friendlyMessage`
+branching (item 28) are all realistic targets — they're logic-heavy and
+don't require a browser. Component tests (React Testing Library) for
+`AddPlantModal`/`EditPlantModal`/`AuthForm` are a separate, larger step this
+item isn't scoping.
