@@ -500,14 +500,36 @@ coverage yet. See item 31 for what's left.
 
 ### 14. Dependency vulnerabilities
 
-**Status:** Open
+**Status:** Fixed — 2026-09-15
 
-`npm audit --omit=dev` reports **5 high-severity advisories**: `sharp` <0.35.0
-inheriting four libvips CVEs, and two `postcss` source-map path-traversal
-advisories via `next`. Both are fixable with `npm audit fix`.
+**Resolved — the part scoped to `npm audit fix` and a patch bump.** By today,
+`npm audit --omit=dev` had grown past what this item originally described —
+`next`'s range had accumulated a long list of newly-published critical/high
+CVEs (request smuggling, several Server Component and Middleware/Proxy
+bypass and cache-poisoning issues, DoS, and more) on top of the two originally
+named. `npm audit fix` (no `--force`) bumped `sharp` past all four libvips
+CVEs. Bumping `next` from `^15.0.0` to `^15.5.25` — still the patch-release
+move this item called for, just further down the same 15.x line than it
+anticipated — cleared every one of those `next`-specific advisories.
 
-Separately, `next` is on 15.5.12 with 15.5.24 available — worth taking the
-patch releases at the same time.
+One advisory remains after both fixes: `next@15.5.25` still vendors its own
+internal `postcss@8.4.31` (in `node_modules/next/node_modules/postcss`,
+separate from this project's own `postcss@8.5.28`), which carries the
+XSS/path-traversal advisories. `npm audit fix --force` reports the only fix
+is `next@16.3.5` — a major-version jump, not a patch release, so it's out of
+scope for what this item asked for and is tracked as item 32 instead of
+being forced through same-day.
+
+Verified: `npm audit --omit=dev` now reports only that one remaining
+postcss-via-next advisory (down from the original list). `npx tsc --noEmit`
+clean, `npm run lint` unchanged (same 6 pre-existing `no-img-element`
+warnings, item 19), `npm run build` succeeds with dummy env vars, and the
+existing 47-test vitest suite (item 13) still passes unchanged.
+
+Not touched: the dev-only `vitest`/`vite`/`esbuild` advisories `npm audit`
+(without `--omit=dev`) also reports. Those need `vitest@5`, which item 13
+already documented as blocked on this project's `@types/node: ^20` peer
+range — same constraint, not new scope for this item.
 
 ### 15. Stray files in the working tree
 
@@ -786,6 +808,26 @@ invalid", so the first branch always won and the second was dead code — a
 freshly mistyped code told the user it had expired and to send a new one.
 Observed while testing item 26. Merged into one branch that does not claim to
 know which of the two it was.
+
+### 32. `next`'s bundled postcss stays vulnerable short of a major-version upgrade
+
+**Priority:** P1
+**Status:** Open
+
+Split out of item 14, which closed today with the `npm audit fix` +
+15.x-patch half of the fix. `next@15.5.25` (the latest 15.x release) still
+vendors its own internal `postcss@8.4.31` in
+`node_modules/next/node_modules/postcss`, isolated from this project's own
+(already-patched) `postcss@8.5.28` dependency, so it doesn't move when our
+own `postcss` version does. `npm audit fix --force` reports the only
+available fix is `next@16.3.5`.
+
+`next`'s own peer dependencies allow React 18.2+, so a React 19 migration
+isn't forced by this alone, but a Next.js major version is still a real
+migration (removed APIs, changed defaults, config changes) that needs its
+own review of the Next 16 upgrade guide and a full click-through of the app
+afterward — not something to force through as a side effect of a dependency
+audit. Do that review, then take the major version bump deliberately.
 
 ### 31. Test coverage stops at `lib/careStatus.ts` / `lib/seasonUtils.ts`
 

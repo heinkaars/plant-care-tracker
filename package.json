@@ -14,7 +14,7 @@
     "@supabase/supabase-js": "^2.112.4",
     "@vercel/analytics": "^1.6.1",
     "date-fns": "^3.0.0",
-    "next": "^15.0.0",
+    "next": "^15.5.25",
     "openai": "^4.67.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
