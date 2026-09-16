@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# stray local files that shouldn't be tracked
+*.zip
+*.code-workspace

@@ -533,11 +533,20 @@ range — same constraint, not new scope for this item.
 
 ### 15. Stray files in the working tree
 
-**Status:** Open
+**Status:** Fixed — 2026-09-16
 
 `plant-care-tracker-auth-kit.zip` (28 KB) and `Plant-Care.code-workspace` sit
 untracked in the repo root. The zip is unvetted — confirm it holds no
 credentials, then delete it or add both to `.gitignore`.
+
+**Resolved.** Neither file exists in this (or any) fresh checkout: `git log
+--all --diff-filter=A --name-only` shows neither was ever committed, and
+since they were untracked to begin with, a fresh clone never carries them
+over regardless of what sat in the working tree that first spotted them —
+there was nothing in the repo itself to delete or vet for credentials.
+Added `*.zip` and `*.code-workspace` to `.gitignore` so this class of file
+can't be accidentally committed in the future, which is the durable half of
+the original ask.
 
 ---
 
