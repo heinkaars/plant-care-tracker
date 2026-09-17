@@ -554,12 +554,38 @@ the original ask.
 
 ### 16. Native `confirm()` / `prompt()` for destructive and data-entry actions
 
-**Status:** Open
+**Status:** Fixed — 2026-09-17
 
-Plant deletion uses `confirm()` ([plants/page.tsx:43](app/plants/page.tsx#L43),
-[plants/[id]/page.tsx:41](app/plants/[id]/page.tsx#L41)) and care notes use
+Plant deletion used `confirm()` ([plants/page.tsx:43](app/plants/page.tsx#L43),
+[plants/[id]/page.tsx:41](app/plants/[id]/page.tsx#L41)) and care notes used
 `prompt()` ([plants/[id]/page.tsx:35](app/plants/[id]/page.tsx#L35)). Blocking,
 unstyled, poor on mobile, and inconsistent with the rest of the UI.
+
+**Resolved.** Added two new modal components matching the existing
+`EditPlantModal`/`AddPlantModal` fixed-overlay/rounded-card pattern:
+[components/ConfirmDialog.tsx](components/ConfirmDialog.tsx) (generic
+title/message/confirm/cancel dialog, with a `danger` flag that reddens the
+confirm button for destructive actions) and
+[components/CareNotesModal.tsx](components/CareNotesModal.tsx) (a small form
+with a notes textarea, replacing the "Add notes for X (optional):" prompt).
+
+`app/plants/page.tsx` and `app/plants/[id]/page.tsx` both now track a
+`confirmDelete`/`confirmDeleteId` piece of state instead of calling
+`confirm()` inline — the Delete button opens the dialog, and the actual
+`storage.deletePlant` call only runs from the dialog's `onConfirm`.
+`app/plants/[id]/page.tsx`'s "Mark Done" button similarly opens
+`CareNotesModal` (tracking which `CareType` triggered it) instead of calling
+`prompt()`, and `handleCareEvent` now takes the notes as an argument from the
+modal's `onConfirm` rather than reading a blocking prompt's return value.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged (same 6
+pre-existing `no-img-element` warnings, item 19), the existing 47-test vitest
+suite (item 13) still passes unchanged, and `npm run build` succeeds with
+dummy env vars. Not exercised in a browser in this sandboxed run (no way to
+launch/screenshot the dev server here); the new components reuse the same
+JSX/Tailwind shape already verified working in `EditPlantModal`, and the
+state wiring mirrors the existing `showEditModal`/`showAddModal` pattern in
+the same files.
 
 ### 17. Hemisphere is hardcoded to northern
 

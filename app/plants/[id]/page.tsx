@@ -10,6 +10,8 @@ import { Plant, CareType } from '@/types/plant';
 import { format, parseISO } from 'date-fns';
 import { getCurrentSeason, getSeasonDisplay } from '@/lib/seasonUtils';
 import EditPlantModal from '@/components/EditPlantModal';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import CareNotesModal from '@/components/CareNotesModal';
 
 export default function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -20,6 +22,8 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadIndex, setReloadIndex] = useState(0);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [careNotesType, setCareNotesType] = useState<CareType | null>(null);
   const router = useRouter();
 
   // Wait for the auth bootstrap to produce a session before reading —
@@ -52,10 +56,12 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
     };
   }, [id, router, ready, userId, reloadIndex]);
 
-  const handleCareEvent = async (careType: CareType) => {
-    const notes = prompt(`Add notes for ${careType} (optional):`);
+  const handleCareEvent = async (notes?: string) => {
+    const careType = careNotesType;
+    setCareNotesType(null);
+    if (!careType) return;
     try {
-      await storage.addCareEvent(id, careType, notes || undefined);
+      await storage.addCareEvent(id, careType, notes);
       const refreshed = await storage.getPlant(id);
       if (refreshed) setPlant(refreshed);
     } catch (err) {
@@ -64,7 +70,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this plant?')) return;
+    setConfirmDelete(false);
     try {
       await storage.deletePlant(id);
       router.push('/plants');
@@ -208,7 +214,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                 Edit Plant
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => setConfirmDelete(true)}
                 className="w-full mt-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
               >
                 Delete Plant
@@ -270,7 +276,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                         </div>
                       </div>
                       <button
-                        onClick={() => handleCareEvent(schedule.type)}
+                        onClick={() => setCareNotesType(schedule.type)}
                         className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition whitespace-nowrap"
                       >
                         Mark Done
@@ -347,6 +353,25 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           plant={plant}
           onClose={() => setShowEditModal(false)}
           onSave={handlePlantEdited}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete plant"
+          message="Are you sure you want to delete this plant?"
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
+      {careNotesType && (
+        <CareNotesModal
+          careType={careNotesType}
+          onClose={() => setCareNotesType(null)}
+          onConfirm={handleCareEvent}
         />
       )}
     </div>

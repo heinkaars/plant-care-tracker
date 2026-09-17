@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getPlantStatus } from '@/lib/careStatus';
 import { Plant } from '@/types/plant';
 import AddPlantModal from '@/components/AddPlantModal';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 export default function PlantsPage() {
   const { ready, userId, error, retry } = useAuth();
@@ -17,6 +18,7 @@ export default function PlantsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Check URL params
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function PlantsPage() {
   };
 
   const handleDeletePlant = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this plant?')) return;
+    setConfirmDeleteId(null);
     try {
       await storage.deletePlant(id);
       setPlants(await storage.getPlants());
@@ -216,7 +218,7 @@ export default function PlantsPage() {
                       {getStatusText(status)}
                     </span>
                     <button
-                      onClick={() => handleDeletePlant(plant.id)}
+                      onClick={() => setConfirmDeleteId(plant.id)}
                       className="text-red-600 hover:text-red-800 text-sm"
                     >
                       Delete
@@ -260,7 +262,7 @@ export default function PlantsPage() {
                       {getStatusText(status)}
                     </span>
                     <button
-                      onClick={() => handleDeletePlant(plant.id)}
+                      onClick={() => setConfirmDeleteId(plant.id)}
                       className="text-red-600 hover:text-red-800 text-sm px-3 py-1"
                     >
                       Delete
@@ -277,6 +279,17 @@ export default function PlantsPage() {
         <AddPlantModal
           onClose={() => setShowAddModal(false)}
           onPlantAdded={handlePlantAdded}
+        />
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmDialog
+          title="Delete plant"
+          message="Are you sure you want to delete this plant?"
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDeletePlant(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
         />
       )}
     </div>
