@@ -174,7 +174,12 @@ export const storage = {
   },
 
   // Add care event to a plant
-  addCareEvent: async (plantId: string, careType: CareType, notes?: string): Promise<void> => {
+  addCareEvent: async (
+    plantId: string,
+    careType: CareType,
+    notes?: string,
+    hemisphere: 'northern' | 'southern' = 'northern'
+  ): Promise<void> => {
     const plant = await storage.getPlant(plantId);
     if (!plant) return;
 
@@ -192,7 +197,7 @@ export const storage = {
     if (schedule) {
       schedule.lastCareDate = now;
       const frequency = schedule.seasonalFrequency
-        ? getSeasonalFrequency(schedule.seasonalFrequency)
+        ? getSeasonalFrequency(schedule.seasonalFrequency, undefined, hemisphere)
         : schedule.frequencyDays;
       // A frequency of 0 means "skip this season" (e.g. no winter fertilizing) —
       // leave nextDueDate unset rather than due immediately, until the season

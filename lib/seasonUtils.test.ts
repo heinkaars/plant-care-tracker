@@ -47,6 +47,14 @@ describe('getSeasonalFrequency', () => {
   ])('returns the frequency for the season containing %s', (dateStr, expected) => {
     expect(getSeasonalFrequency(frequencies, new Date(dateStr))).toBe(expected);
   });
+
+  it('resolves the season by the passed-through hemisphere, not just the date', () => {
+    // 2026-07-01 is northern summer / southern winter — same date, opposite
+    // seasons, so this only passes if the hemisphere argument actually
+    // reaches getCurrentSeason (ISSUES.md #17).
+    expect(getSeasonalFrequency(frequencies, new Date('2026-07-01'), 'northern')).toBe(1);
+    expect(getSeasonalFrequency(frequencies, new Date('2026-07-01'), 'southern')).toBe(0);
+  });
 });
 
 describe('getSeasonDisplay', () => {

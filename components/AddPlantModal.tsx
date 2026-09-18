@@ -5,6 +5,7 @@ import { CareSchedule, CareType, Plant, PlantFormData, SeasonalFrequency } from 
 import { addDays } from 'date-fns';
 import { getCurrentFrequency } from '@/lib/careStatus';
 import { compressImageFile } from '@/lib/image';
+import { useAuth } from '@/lib/auth-context';
 
 interface AddPlantModalProps {
   onClose: () => void;
@@ -16,6 +17,7 @@ interface AddPlantModalProps {
 type InputMethod = 'manual' | 'search' | 'camera';
 
 export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalProps) {
+  const { hemisphere } = useAuth();
   const [inputMethod, setInputMethod] = useState<InputMethod>('manual');
   const [formData, setFormData] = useState<PlantFormData>({
     name: '',
@@ -155,7 +157,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       lastCareDate: null,
       nextDueDate: null,
     };
-    const frequency = getCurrentFrequency(schedule);
+    const frequency = getCurrentFrequency(schedule, hemisphere);
     schedule.nextDueDate = frequency === 0 ? null : addDays(new Date(), frequency).toISOString();
     return schedule;
   };

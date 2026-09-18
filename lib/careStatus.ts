@@ -7,9 +7,12 @@ export type CareStatus = 'overdue' | 'due-soon' | 'ok';
 /**
  * Gets the appropriate frequency for a care schedule based on current season
  */
-export function getCurrentFrequency(schedule: CareSchedule): number {
+export function getCurrentFrequency(
+  schedule: CareSchedule,
+  hemisphere: 'northern' | 'southern' = 'northern'
+): number {
   if (schedule.seasonalFrequency) {
-    return getSeasonalFrequency(schedule.seasonalFrequency);
+    return getSeasonalFrequency(schedule.seasonalFrequency, undefined, hemisphere);
   }
   return schedule.frequencyDays;
 }
@@ -22,9 +25,13 @@ export function getCurrentFrequency(schedule: CareSchedule): number {
  * from the last care date if there is one, otherwise from `fallbackDate`
  * (the plant's dateAdded), matching how the initial due date is seeded.
  */
-export function computeNextDueDate(schedule: CareSchedule, fallbackDate: string): string | null {
+export function computeNextDueDate(
+  schedule: CareSchedule,
+  fallbackDate: string,
+  hemisphere: 'northern' | 'southern' = 'northern'
+): string | null {
   const baseDate = schedule.lastCareDate ?? fallbackDate;
-  const frequency = getCurrentFrequency(schedule);
+  const frequency = getCurrentFrequency(schedule, hemisphere);
   return frequency === 0 ? null : addDays(parseISO(baseDate), frequency).toISOString();
 }
 

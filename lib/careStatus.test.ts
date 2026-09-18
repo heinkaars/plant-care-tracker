@@ -45,6 +45,18 @@ describe('getCurrentFrequency', () => {
     });
     expect(getCurrentFrequency(schedule)).toBe(0);
   });
+
+  it('uses the southern-hemisphere season when passed one (ISSUES.md #17)', () => {
+    // Same date is northern summer / southern winter — a schedule with
+    // "skip in winter" (0) should resolve differently per hemisphere.
+    vi.setSystemTime(new Date('2026-07-01'));
+    const schedule = makeSchedule({
+      frequencyDays: 7,
+      seasonalFrequency: { spring: 3, summer: 1, fall: 5, winter: 0 },
+    });
+    expect(getCurrentFrequency(schedule, 'northern')).toBe(1);
+    expect(getCurrentFrequency(schedule, 'southern')).toBe(0);
+  });
 });
 
 describe('computeNextDueDate', () => {

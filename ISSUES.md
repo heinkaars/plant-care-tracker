@@ -589,7 +589,7 @@ the same files.
 
 ### 17. Hemisphere is hardcoded to northern
 
-**Status:** Open
+**Status:** Fixed — 2026-09-18
 
 [lib/seasonUtils.ts:10](lib/seasonUtils.ts#L10) accepts a `hemisphere`
 argument but every caller uses the default — `getSeasonalFrequency` calls
@@ -597,6 +597,55 @@ argument but every caller uses the default — `getSeasonalFrequency` calls
 ([seasonUtils.ts:54](lib/seasonUtils.ts#L54)), so the parameter is
 unreachable from the app. Southern-hemisphere users get inverted seasonal
 care schedules. Needs a user setting threaded through `getSeasonalFrequency`.
+
+**Resolved.** `getSeasonalFrequency` now takes and passes through a
+`hemisphere` argument to `getCurrentSeason` instead of dropping it
+([lib/seasonUtils.ts](lib/seasonUtils.ts)), and `getCurrentFrequency` /
+`computeNextDueDate` in [lib/careStatus.ts](lib/careStatus.ts) grew the same
+optional parameter (defaulting to `'northern'`, so every existing call site
+that doesn't pass one keeps its current behavior).
+
+The user setting itself lives in the Supabase auth user's own metadata
+(`supabase.auth.updateUser({ data: { hemisphere } })`) rather than a new
+table — it's a per-account preference, not plant data, so it doesn't need
+its own RLS-scoped table or a schema migration, and it rides along with the
+session the same way `signUp`'s email/password updates already do. Added
+`hemisphere: Hemisphere` (`'northern' | 'southern'`) and a `setHemisphere`
+action to [lib/auth-context.tsx](lib/auth-context.tsx)'s `AuthState` /
+`AuthContextValue`, read off `session.user.user_metadata.hemisphere`
+(defaulting to `'northern'` when unset, which covers every account created
+before this change). A new "Preferences" section on
+[app/account/page.tsx](app/account/page.tsx) exposes it as a select, visible
+whether or not the user has attached an email — it applies to the anonymous
+account too.
+
+Threaded `hemisphere` from `useAuth()` into every place that resolves a
+schedule's current-season frequency: `AddPlantModal.buildSchedule` (seeding
+the first due date, item 3), `EditPlantModal.handleSubmit`
+(`computeNextDueDate`, item 12), `app/plants/[id]/page.tsx`'s season/frequency
+display and its call to `storage.addCareEvent`, and `storage.addCareEvent`
+itself, which now takes `hemisphere` as a fourth argument and passes it into
+`getSeasonalFrequency`. The dashboard and collection views needed no change —
+they only call `getCareStatus`/`getPlantStatus`/`getDashboardStats`/
+`getUpcomingCare`, which read an already-resolved `nextDueDate` rather than
+recomputing a frequency.
+
+Added two table-driven cases (one in
+[lib/seasonUtils.test.ts](lib/seasonUtils.test.ts), one in
+[lib/careStatus.test.ts](lib/careStatus.test.ts)) asserting that the same
+date resolves to opposite seasons — and thus opposite frequencies — for
+`'northern'` vs `'southern'`, so a regression that drops the hemisphere
+argument again would fail a test rather than only showing up for real
+southern-hemisphere users. 49 tests total, all passing (up from 47).
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged (same 6
+pre-existing `no-img-element` warnings, item 19), the vitest suite passes
+(49/49), and `npm run build` succeeds with dummy env vars. Not exercised in
+a browser or against a live Supabase project in this run (no credentials in
+this environment, same constraint noted on items 9–12) — `updateUser({ data
+})` is the same call `signUp` already makes for email/password, so the only
+new surface is reading `user_metadata.hemisphere` back off the session,
+which is a plain property read.
 
 ### 18. Every AI failure blames the user's API key
 

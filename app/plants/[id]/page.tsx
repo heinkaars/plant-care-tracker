@@ -15,7 +15,7 @@ import CareNotesModal from '@/components/CareNotesModal';
 
 export default function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { ready, userId, error: authError, retry } = useAuth();
+  const { ready, userId, hemisphere, error: authError, retry } = useAuth();
   const [plant, setPlant] = useState<Plant | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
     setCareNotesType(null);
     if (!careType) return;
     try {
-      await storage.addCareEvent(id, careType, notes);
+      await storage.addCareEvent(id, careType, notes, hemisphere);
       const refreshed = await storage.getPlant(id);
       if (refreshed) setPlant(refreshed);
     } catch (err) {
@@ -233,8 +233,8 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
             <div className="p-6 space-y-4">
               {plant.careSchedules.map((schedule) => {
                 const status = getCareStatus(schedule);
-                const currentSeason = getCurrentSeason();
-                const currentFreq = getCurrentFrequency(schedule);
+                const currentSeason = getCurrentSeason(new Date(), hemisphere);
+                const currentFreq = getCurrentFrequency(schedule, hemisphere);
                 const hasSeasonal = !!schedule.seasonalFrequency;
 
                 return (

@@ -5,6 +5,7 @@ import { CareType, Plant, SeasonalFrequency } from '@/types/plant';
 import { computeNextDueDate } from '@/lib/careStatus';
 import { compressImageFile } from '@/lib/image';
 import { getSeasonDisplay } from '@/lib/seasonUtils';
+import { useAuth } from '@/lib/auth-context';
 
 interface EditPlantModalProps {
   plant: Plant;
@@ -22,6 +23,7 @@ const CARE_LABELS: Record<CareType, string> = {
 };
 
 export default function EditPlantModal({ plant, onClose, onSave }: EditPlantModalProps) {
+  const { hemisphere } = useAuth();
   const [name, setName] = useState(plant.name);
   const [scientificName, setScientificName] = useState(plant.scientificName ?? '');
   const [notes, setNotes] = useState(plant.notes ?? '');
@@ -68,7 +70,7 @@ export default function EditPlantModal({ plant, onClose, onSave }: EditPlantModa
     // first created.
     const updatedSchedules = schedules.map((schedule) => ({
       ...schedule,
-      nextDueDate: computeNextDueDate(schedule, plant.dateAdded),
+      nextDueDate: computeNextDueDate(schedule, plant.dateAdded, hemisphere),
     }));
 
     const updatedPlant: Plant = {

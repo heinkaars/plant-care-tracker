@@ -4,6 +4,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Session } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
+export type Hemisphere = 'northern' | 'southern';
+
 type AuthState = {
   /** False until we know whether a session exists. Screens should wait on it. */
   ready: boolean;
@@ -14,6 +16,11 @@ type AuthState = {
   /** True only for the visit that created the account, never after a restore. */
   justCreated: boolean;
   email: string | null;
+  /** Drives season selection in lib/seasonUtils.ts. Stored in the user's own
+   * auth metadata (not a plants column) so it survives sign-in/out and syncs
+   * across devices without a schema migration — defaults to 'northern' for
+   * every account until they change it in Account settings. */
+  hemisphere: Hemisphere;
   /** Set when we could not create the first account (usually no connection). */
   error: string | null;
 };
@@ -47,6 +54,9 @@ type AuthContextValue = AuthState & {
   resetPassword: (email: string, code: string, password: string) => Promise<void>;
   /** Returns to a fresh anonymous account, never to a signed-out dead end. */
   signOut: () => Promise<void>;
+  /** Persists the user's hemisphere so seasonal care schedules resolve to
+   * the right season for them (see ISSUES.md #17). */
+  setHemisphere: (hemisphere: Hemisphere) => Promise<void>;
   retry: () => void;
 };
 
@@ -98,6 +108,10 @@ function fail(raw: string): never {
   throw new Error(friendlyMessage(raw));
 }
 
+function hemisphereFromSession(session: Session | null): Hemisphere {
+  return session?.user.user_metadata?.hemisphere === 'southern' ? 'southern' : 'northern';
+}
+
 function stateFromSession(
   session: Session | null,
   error: string | null = null,
@@ -110,6 +124,7 @@ function stateFromSession(
     isAnonymous: session?.user.is_anonymous ?? false,
     justCreated,
     email: session?.user.email ?? null,
+    hemisphere: hemisphereFromSession(session),
     error,
   };
 }
@@ -123,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAnonymous: false,
     justCreated: false,
     email: null,
+    hemisphere: 'northern',
     error: null,
   });
   const [attempt, setAttempt] = useState(0);
@@ -256,6 +272,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase],
   );
 
+  const setHemisphere = useCallback(
+    async (hemisphere: Hemisphere) => {
+      const { error } = await supabase.auth.updateUser({ data: { hemisphere } });
+      if (error) fail(error.message);
+      // onAuthStateChange also fires for a metadata update, but setting it
+      // here too avoids a UI flash back to the old value while that arrives.
+      setState((prev) => ({ ...prev, hemisphere }));
+    },
+    [supabase],
+  );
+
   const signOut = useCallback(async () => {
     setState((prev) => ({ ...prev, ready: false, error: null }));
     await supabase.auth.signOut();
@@ -280,9 +307,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestPasswordReset,
       resetPassword,
       signOut,
+      setHemisphere,
       retry,
     }),
-    [state, signUp, confirmSignUp, signIn, requestPasswordReset, resetPassword, signOut, retry],
+    [state, signUp, confirmSignUp, signIn, requestPasswordReset, resetPassword, signOut, setHemisphere, retry],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -49,9 +49,10 @@ export function getSeasonalFrequency(
     fall: number;
     winter: number;
   },
-  date: Date = new Date()
+  date: Date = new Date(),
+  hemisphere: 'northern' | 'southern' = 'northern'
 ): number {
-  const season = getCurrentSeason(date);
+  const season = getCurrentSeason(date, hemisphere);
   return seasonalFrequency[season];
 }
 
