@@ -16,6 +16,20 @@ interface AddPlantModalProps {
 
 type InputMethod = 'manual' | 'search' | 'camera';
 
+// Every /api/search-plant and /api/identify-plant failure — including the
+// api-guard's 401 ("Sign in required") and 429 ("Too many requests") — comes
+// back as { error: string }. Read it instead of assuming every non-OK
+// response means a missing OpenAI key.
+async function extractErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body?.error === 'string' && body.error) return body.error;
+  } catch {
+    // Body wasn't JSON; fall through to the generic message below.
+  }
+  return `Request failed (${response.status})`;
+}
+
 export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalProps) {
   const { hemisphere } = useAuth();
   const [inputMethod, setInputMethod] = useState<InputMethod>('manual');
@@ -58,11 +72,11 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       });
 
       if (!response.ok) {
-        throw new Error('Failed to search for plant');
+        throw new Error(await extractErrorMessage(response));
       }
 
       const data = await response.json();
-      
+
       // Pre-fill form with AI results (seasonal data)
       setFormData({
         name: data.name || searchQuery,
@@ -82,7 +96,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       // Switch to manual mode to review/edit
       setInputMethod('manual');
     } catch (err) {
-      setError('Failed to search for plant. Please check your API key in .env.local');
+      setError(err instanceof Error ? err.message : 'Failed to search for plant');
       console.error(err);
     } finally {
       setLoading(false);
@@ -109,7 +123,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       });
 
       if (!response.ok) {
-        throw new Error('Failed to identify plant');
+        throw new Error(await extractErrorMessage(response));
       }
 
       const data = await response.json();
@@ -133,7 +147,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
       // Switch to manual mode to review/edit
       setInputMethod('manual');
     } catch (err) {
-      setError('Failed to identify plant. Please check your API key in .env.local');
+      setError(err instanceof Error ? err.message : 'Failed to identify plant');
       console.error(err);
     } finally {
       setLoading(false);

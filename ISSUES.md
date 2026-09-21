@@ -649,7 +649,7 @@ which is a plain property read.
 
 ### 18. Every AI failure blames the user's API key
 
-**Status:** Open
+**Status:** Fixed — 2026-09-21
 
 [components/AddPlantModal.tsx:79](components/AddPlantModal.tsx#L79) and
 [:133](components/AddPlantModal.tsx#L133) render "Please check your API key in
@@ -659,6 +659,30 @@ required") and 429 ("Too many requests") from
 user is most likely to hit, and it leaks a dev-only detail into the product.
 
 Read `error` off the response body and show that instead.
+
+**Resolved.** Both `/api/search-plant` and `/api/identify-plant` already
+return `{ error: string }` on every non-OK path (400/401/413/429/500/502,
+checked across both routes and `lib/api-guard.ts`), so there was a real value
+to read. Added `extractErrorMessage(response)` in
+[components/AddPlantModal.tsx](components/AddPlantModal.tsx) — parses the
+response body and returns `body.error` when present, otherwise falls back to
+`Request failed (<status>)` for a non-JSON body. `handleAISearch` and
+`handleCameraCapture` now `throw new Error(await extractErrorMessage(response))`
+instead of a hardcoded string, and their `catch` blocks render `err.message`
+instead of the old "check your API key" text. A genuine network/fetch failure
+(not a route response at all) still falls through to a generic
+"Failed to search for plant" / "Failed to identify plant" message, since
+there's no response body to read in that case.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` unchanged (same 6
+pre-existing `no-img-element` warnings, item 19), the 49-test vitest suite
+(items 13/17) passes unchanged, and `npm run build` succeeds with dummy env
+vars. Not exercised in a browser in this sandboxed run (no way to
+launch/screenshot the dev server here, and no live OpenAI/Supabase
+credentials to actually trigger a 401/429/502) — the three response shapes
+were confirmed by reading every `Response.json`/`NextResponse.json` call in
+`lib/api-guard.ts`, `app/api/search-plant/route.ts`, and
+`app/api/identify-plant/route.ts` directly, all of which return `{ error }`.
 
 ### 19. Plain `<img>` instead of `next/image`
 
