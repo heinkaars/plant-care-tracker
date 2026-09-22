@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storage } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 import { getPlantStatus } from '@/lib/careStatus';
@@ -192,12 +193,14 @@ export default function PlantsPage() {
             return (
               <div key={plant.id} className="bg-white rounded-lg shadow hover:shadow-lg transition">
                 <Link href={`/plants/${plant.id}`}>
-                  <div className="aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center text-6xl overflow-hidden">
+                  <div className="relative aspect-square bg-gray-100 rounded-t-lg flex items-center justify-center text-6xl overflow-hidden">
                     {plant.photo ? (
-                      <img
+                      <Image
                         src={plant.photo}
                         alt={plant.name}
-                        className="w-full h-full object-cover"
+                        fill
+                        sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover"
                       />
                     ) : (
                       '🌿'
@@ -237,12 +240,14 @@ export default function PlantsPage() {
               return (
                 <div key={plant.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
                   <Link href={`/plants/${plant.id}`} className="flex items-center space-x-4 flex-1">
-                    <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-2xl overflow-hidden flex-shrink-0">
+                    <div className="relative w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-2xl overflow-hidden flex-shrink-0">
                       {plant.photo ? (
-                        <img
+                        <Image
                           src={plant.photo}
                           alt={plant.name}
-                          className="w-full h-full object-cover"
+                          fill
+                          sizes="64px"
+                          className="object-cover"
                         />
                       ) : (
                         '🌿'

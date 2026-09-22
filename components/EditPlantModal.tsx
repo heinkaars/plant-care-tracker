@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { CareType, Plant, SeasonalFrequency } from '@/types/plant';
 import { computeNextDueDate } from '@/lib/careStatus';
 import { compressImageFile } from '@/lib/image';
@@ -191,7 +192,9 @@ export default function EditPlantModal({ plant, onClose, onSave }: EditPlantModa
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Plant Photo</label>
               {photo && (
-                <img src={photo} alt="Plant preview" className="w-full h-48 object-cover rounded-lg mb-2" />
+                <div className="relative w-full h-48 mb-2">
+                  <Image src={photo} alt="Plant preview" fill sizes="100vw" className="object-cover rounded-lg" />
+                </div>
               )}
               <input
                 type="file"

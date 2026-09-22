@@ -686,12 +686,42 @@ were confirmed by reading every `Response.json`/`NextResponse.json` call in
 
 ### 19. Plain `<img>` instead of `next/image`
 
-**Status:** Open
+**Status:** Fixed — 2026-09-22
 
 Used on the dashboard, collection, and detail pages — no lazy loading or
 optimization. Relatedly, `images.domains` in `next.config.js` is dead config,
 since nothing uses `next/image` at all (and `domains` is itself deprecated in
 favour of `remotePatterns`).
+
+**Resolved.** All 7 plain `<img>` tags — the dashboard's "Recent Plants" grid
+([app/page.tsx](app/page.tsx)), the collection's grid and list views
+([app/plants/page.tsx](app/plants/page.tsx)), the detail page's photo
+([app/plants/[id]/page.tsx](app/plants/[id]/page.tsx)), and the photo
+previews in [components/AddPlantModal.tsx](components/AddPlantModal.tsx) and
+[components/EditPlantModal.tsx](components/EditPlantModal.tsx) — now use
+`next/image`'s `<Image fill sizes="..." />` inside a `relative`-positioned
+container matching the existing fixed-aspect box, since `plant.photo` is
+currently a base64 data URL (item 29 hasn't moved photos to Storage yet) with
+no intrinsic dimensions for `next/image` to read, and `fill` sidesteps that
+without hardcoding width/height. The detail page's photo also got `priority`,
+since it's the largest above-the-fold image on that route.
+
+`images.domains` in `next.config.js` was in fact dead — nothing loads a
+remote `http(s)` image anywhere in the app, only data URLs and local assets —
+so it's removed rather than migrated to `remotePatterns`. `next/image`
+handles a `data:` URI itself, unoptimized, without needing a domain allowlist
+entry; a remote pattern can be added if item 29 starts serving photos from
+Supabase Storage URLs.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean with zero warnings
+(previously 6 pre-existing `no-img-element` warnings, all now resolved by
+this fix rather than suppressed), the 49-test vitest suite (items 13/17)
+passes unchanged, and `npm run build` succeeds with dummy env vars. Not
+exercised in a browser in this sandboxed run (no way to launch/screenshot the
+dev server here) — `fill` + `sizes` + an explicitly `relative` ancestor is
+the documented pattern for an image whose intrinsic size is unknown, and it
+mirrors the `object-cover`-on-a-fixed-box layout every one of these `<img>`
+tags already used.
 
 ### 20. Dangling reference to a `MIGRATION.md` that doesn't exist
 

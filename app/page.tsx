@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storage } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 import { getDashboardStats, getUpcomingCare } from '@/lib/careStatus';
@@ -203,12 +204,14 @@ export default function Dashboard() {
                 href={`/plants/${plant.id}`}
                 className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
               >
-                <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center text-4xl">
+                <div className="relative aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center text-4xl overflow-hidden">
                   {plant.photo ? (
-                    <img
+                    <Image
                       src={plant.photo}
                       alt={plant.name}
-                      className="w-full h-full object-cover rounded-lg"
+                      fill
+                      sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover rounded-lg"
                     />
                   ) : (
                     '🌿'

@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storage } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 import { getCareStatus, getCurrentFrequency } from '@/lib/careStatus';
@@ -181,12 +182,15 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         <div className="lg:col-span-1 space-y-6">
           {/* Plant Photo */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="aspect-square bg-gray-100 flex items-center justify-center text-8xl">
+            <div className="relative aspect-square bg-gray-100 flex items-center justify-center text-8xl overflow-hidden">
               {plant.photo ? (
-                <img
+                <Image
                   src={plant.photo}
                   alt={plant.name}
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="(min-width: 1024px) 33vw, 100vw"
+                  priority
+                  className="object-cover"
                 />
               ) : (
                 '🌿'

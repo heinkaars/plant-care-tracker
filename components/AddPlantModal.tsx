@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { CareSchedule, CareType, Plant, PlantFormData, SeasonalFrequency } from '@/types/plant';
 import { addDays } from 'date-fns';
 import { getCurrentFrequency } from '@/lib/careStatus';
@@ -408,11 +409,15 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Plant Photo
                   </label>
-                  <img
-                    src={formData.photo}
-                    alt="Plant preview"
-                    className="w-full h-48 object-cover rounded-lg"
-                  />
+                  <div className="relative w-full h-48">
+                    <Image
+                      src={formData.photo}
+                      alt="Plant preview"
+                      fill
+                      sizes="100vw"
+                      className="object-cover rounded-lg"
+                    />
+                  </div>
                 </div>
               )}
 
