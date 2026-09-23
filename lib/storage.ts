@@ -5,9 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 
 /**
  * Same public shape as the old localStorage-backed `storage`, but every
- * method now talks to Supabase and is async. Call sites need `await` added
- * — see MIGRATION.md for the exact diffs in page.tsx, plants/page.tsx, and
- * plants/[id]/page.tsx.
+ * method now talks to Supabase and is async — every call site (page.tsx,
+ * plants/page.tsx, plants/[id]/page.tsx) already awaits it.
  *
  * Data is scoped by Row Level Security to whoever is signed in (including
  * the silent anonymous account created on first visit — see

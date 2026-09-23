@@ -725,12 +725,24 @@ tags already used.
 
 ### 20. Dangling reference to a `MIGRATION.md` that doesn't exist
 
-**Status:** Open
+**Status:** Fixed — 2026-09-23
 
-[lib/storage.ts:9](lib/storage.ts#L9) points readers at "MIGRATION.md for the
+[lib/storage.ts:9](lib/storage.ts#L9) pointed readers at "MIGRATION.md for the
 exact diffs in page.tsx, plants/page.tsx, and plants/[id]/page.tsx". No such
-file is in the repo. Either write it or drop the reference — and see item 4,
+file was in the repo. Either write it or drop the reference — and see item 4,
 which has the same problem pointing at the README.
+
+**Resolved.** Dropped the reference rather than writing the file: the
+migration itself is long complete on `main` — `app/page.tsx`,
+`app/plants/page.tsx`, and `app/plants/[id]/page.tsx` already `await` every
+`storage` call — so a migration doc for a diff that already shipped would add
+nothing a reader needs. The module comment in
+[lib/storage.ts](lib/storage.ts) now just states that every call site already
+awaits it, instead of pointing at a nonexistent file.
+
+Item 4's README reference is a separate, still-open dangling pointer (a
+not-yet-written server-side migration, not a historical diff) and is left for
+its own item.
 
 ### 21. Dead code: discarded client-side plant id
 
