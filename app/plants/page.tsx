@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { storage } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 import { getPlantStatus } from '@/lib/careStatus';
-import { Plant } from '@/types/plant';
+import { NewPlant, Plant } from '@/types/plant';
 import AddPlantModal from '@/components/AddPlantModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
@@ -59,7 +59,7 @@ export default function PlantsPage() {
 
   // Returns whether the save succeeded so AddPlantModal can keep itself
   // open and show the failure instead of closing as though it had worked.
-  const handlePlantAdded = async (plant: Plant): Promise<boolean> => {
+  const handlePlantAdded = async (plant: NewPlant): Promise<boolean> => {
     try {
       await storage.addPlant(plant);
       setPlants(await storage.getPlants());

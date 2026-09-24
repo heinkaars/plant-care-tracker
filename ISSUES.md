@@ -746,11 +746,32 @@ its own item.
 
 ### 21. Dead code: discarded client-side plant id
 
-**Status:** Open
+**Status:** Fixed — 2026-09-24
 
 [components/AddPlantModal.tsx:142](components/AddPlantModal.tsx#L142) generates
 an `id` that `storage.addPlant` silently ignores — Supabase generates the real
 one. A leftover from the localStorage era that misleads on first read.
+
+**Resolved.** Removed the `id: \`${Date.now()}-${Math.random()}\`` line from
+`createPlant` in `components/AddPlantModal.tsx` — `storage.addPlant` only ever
+read the explicit fields it inserts (`name`, `scientificName`, `photo`,
+`care_schedules`, `care_history`, `notes`, `date_added`), never `plant.id`, so
+nothing behavioral depended on it.
+
+Since `Plant.id: string` is required and a not-yet-saved plant genuinely has
+no id, added `NewPlant = Omit<Plant, 'id'>` in
+[types/plant.ts](types/plant.ts) instead of inventing a fake one. Threaded it
+through the one path that builds a plant before it has a real id:
+`AddPlantModal`'s `onPlantAdded` prop, `app/plants/page.tsx`'s
+`handlePlantAdded`, and `storage.addPlant`'s parameter type all now say
+`NewPlant` rather than `Plant`, so the type system reflects what was already
+true at runtime instead of a call site synthesizing a value nothing reads.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean, the 49-test vitest
+suite (items 13/17) passes unchanged, and `npm run build` succeeds with dummy
+env vars. Not exercised in a browser in this sandboxed run (no way to
+launch/screenshot the dev server here, and no live Supabase credentials) —
+this is a type-level cleanup with no change to what gets sent to Supabase.
 
 ---
 

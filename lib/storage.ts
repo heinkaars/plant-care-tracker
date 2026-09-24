@@ -1,4 +1,4 @@
-import { Plant, CareHistory, CareType } from '@/types/plant';
+import { Plant, NewPlant, CareHistory, CareType } from '@/types/plant';
 import { addDays, parseISO } from 'date-fns';
 import { getSeasonalFrequency } from '@/lib/seasonUtils';
 import { createClient } from '@/lib/supabase/client';
@@ -81,10 +81,8 @@ export const storage = {
     return data ? fromRow(data as PlantRow) : undefined;
   },
 
-  // Add a new plant. Supabase generates the id — pass a Plant without a
-  // real id (AddPlantModal's client-side placeholder id is ignored) and use
-  // the returned row for the real one.
-  addPlant: async (plant: Plant): Promise<Plant> => {
+  // Add a new plant. Supabase generates the id; use the returned row for it.
+  addPlant: async (plant: NewPlant): Promise<Plant> => {
     const supabase = createClient();
     const {
       data: { user },

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { CareSchedule, CareType, Plant, PlantFormData, SeasonalFrequency } from '@/types/plant';
+import { CareSchedule, CareType, NewPlant, PlantFormData, SeasonalFrequency } from '@/types/plant';
 import { addDays } from 'date-fns';
 import { getCurrentFrequency } from '@/lib/careStatus';
 import { compressImageFile } from '@/lib/image';
@@ -12,7 +12,7 @@ interface AddPlantModalProps {
   onClose: () => void;
   /** Returns whether the save succeeded, so a failure can be shown here
    * instead of the modal closing as though it had worked. */
-  onPlantAdded: (plant: Plant) => Promise<boolean>;
+  onPlantAdded: (plant: NewPlant) => Promise<boolean>;
 }
 
 type InputMethod = 'manual' | 'search' | 'camera';
@@ -179,8 +179,7 @@ export default function AddPlantModal({ onClose, onPlantAdded }: AddPlantModalPr
 
   const createPlant = async (data: PlantFormData) => {
     const now = new Date().toISOString();
-    const plant: Plant = {
-      id: `${Date.now()}-${Math.random()}`,
+    const plant: NewPlant = {
       name: data.name,
       scientificName: data.scientificName,
       photo: data.photo,

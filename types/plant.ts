@@ -34,6 +34,9 @@ export interface Plant {
   dateAdded: string;
 }
 
+// A plant not yet saved: Supabase assigns the real id on insert.
+export type NewPlant = Omit<Plant, 'id'>;
+
 export interface PlantFormData {
   name: string;
   scientificName?: string;
