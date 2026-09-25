@@ -779,12 +779,37 @@ this is a type-level cleanup with no change to what gets sent to Supabase.
 
 ### 22. No CI
 
-**Status:** Open
+**Status:** Fixed — 2026-09-25
 
 Nothing runs lint, typecheck, or build on push. A GitHub Action covering all
 three would have caught the unwired-auth gap indirectly and guards the tests
 from item 13. Note it needs item 8 resolved first — there is no lint config to
 run today.
+
+**Resolved.** Item 8 (ESLint config) and item 13 (vitest suite) had both
+already landed, so the workflow covers all four checks rather than just the
+two originally in scope. Added
+[.github/workflows/ci.yml](.github/workflows/ci.yml): a single job on
+`push`/`pull_request` to `main` and `add-supabase-auth` that runs `npm ci`,
+then `npx tsc --noEmit`, `npm run lint`, `npm run test`, and `npm run build`
+in that order (fail fast on the cheapest checks first). Node 20 to match
+`@types/node: ^20.0.0`.
+
+The build step needs env vars to get past static prerender of `/`
+(item 1), so the job sets the same dummy `NEXT_PUBLIC_SUPABASE_URL` /
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` this automation's own verification step
+already uses, plus a dummy `OPENAI_API_KEY` (item 8 found the OpenAI client
+is also constructed at module scope) — none of them real credentials, only
+enough to satisfy the client constructors during the build.
+
+Verified by running the exact same four commands locally in this sandboxed
+environment (`node_modules` had to be installed first via `npm ci`, which
+was not yet present in this checkout): `npx tsc --noEmit` clean, `npm run
+lint` clean (zero warnings), `npm run test` 49/49 passing, `npm run build`
+succeeds with the dummy env vars. Not verified as an actual GitHub Actions
+run in this sandboxed session (no way to trigger or observe Actions from
+here) — the workflow runs the identical commands this automation already
+uses to gate its own commits, so a green local run is a strong proxy.
 
 ### 23. No error boundary
 

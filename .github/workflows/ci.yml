@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, add-supabase-auth]
+  pull_request:
+    branches: [main, add-supabase-auth]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_dummy_key_for_build_test
+      OPENAI_API_KEY: sk-dummy-key-for-build-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      - run: npm run lint
+
+      - run: npm run test
+
+      - run: npm run build
