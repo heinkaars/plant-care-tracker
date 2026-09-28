@@ -813,9 +813,35 @@ uses to gate its own commits, so a green local run is a strong proxy.
 
 ### 23. No error boundary
 
-**Status:** Open
+**Status:** Fixed — 2026-09-28
 
 An uncaught render error blanks the page with no recovery path.
+
+**Resolved.** Added [app/error.tsx](app/error.tsx), the App Router's
+segment-level error boundary — it catches a render error anywhere under the
+root layout (so the nav still renders) and shows the same red-box "Try
+again" pattern items 5/7 already established (`app/page.tsx`,
+`app/plants/page.tsx`, `app/plants/[id]/page.tsx`), wired to Next's `reset()`
+to retry rendering the segment instead of a full reload.
+
+Also added [app/global-error.tsx](app/global-error.tsx) for the one case
+`error.tsx` can't catch: an error thrown by the root layout itself
+(`app/layout.tsx`). Since it replaces the whole root layout when it renders,
+it supplies its own `<html>`/`<body>` and imports `./globals.css` directly
+so Tailwind classes still apply — otherwise noted as a common gotcha in the
+Next.js docs for this file.
+
+Both are client components that log the caught error via `console.error`
+before rendering the fallback, matching how errors are already surfaced
+elsewhere in the app.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean, the 49-test vitest
+suite (items 13/17) passes unchanged, and `npm run build` succeeds with
+dummy env vars. Not exercised in a browser in this sandboxed run (no way to
+launch/screenshot the dev server here) — `error.tsx`/`global-error.tsx` are
+plain Next.js file conventions with no data dependency, so a clean build is
+a strong proxy; verifying the actual catch-and-reset behavior in a browser is
+worth doing in a future run that has one.
 
 ### 24. Loading states are bare text
 
