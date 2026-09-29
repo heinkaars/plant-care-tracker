@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getDashboardStats, getUpcomingCare } from '@/lib/careStatus';
 import { Plant } from '@/types/plant';
 import { format, parseISO } from 'date-fns';
+import { DashboardSkeleton } from '@/components/Skeletons';
 
 export default function Dashboard() {
   const { ready, userId, error, retry } = useAuth();
@@ -71,7 +72,7 @@ export default function Dashboard() {
   }
 
   if (!ready || loading) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <DashboardSkeleton />;
   }
 
   const stats = getDashboardStats(plants);

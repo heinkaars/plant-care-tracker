@@ -845,10 +845,34 @@ worth doing in a future run that has one.
 
 ### 24. Loading states are bare text
 
-**Status:** Open
+**Status:** Fixed — 2026-09-29
 
 Every page renders `Loading...` centered on an empty screen. Skeletons
 matching the eventual layout would reduce the jolt.
+
+**Resolved.** Added [components/Skeletons.tsx](components/Skeletons.tsx) —
+`DashboardSkeleton`, `PlantsGridSkeleton`, `PlantDetailSkeleton`, and
+`AccountSkeleton`, each a `Pulse` (gray `animate-pulse` block) helper laid out
+to match that page's actual post-load structure (stat cards and task rows for
+the dashboard, a photo-card grid for `/plants`, the photo/info-column-plus-
+schedule-column split for the plant detail page, the form-card shape for
+`/account`). Each of the four `if (!ready || loading) return <div>Loading...</div>`
+early-returns in `app/page.tsx`, `app/plants/page.tsx`,
+`app/plants/[id]/page.tsx`, and `app/account/page.tsx` now returns its
+matching skeleton instead.
+
+Deliberately not addressed: `PlantsGridSkeleton` always renders the grid
+layout, not the list layout `viewMode === 'list'` can switch to — `viewMode`
+is local component state with no persisted default, so there's no signal to
+pick from before the first render, and the grid is the initial default either
+way.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean (zero warnings), the
+49-test vitest suite (items 13/17) passes unchanged, and `npm run build`
+succeeds with dummy env vars. Not exercised in a browser in this sandboxed
+run (no way to launch/screenshot the dev server here) — the skeletons are
+static markup with no data dependency, built directly from each page's own
+JSX structure.
 
 ### 25. Documentation is out of date as of `694dbad`
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Hemisphere, useAuth } from '@/lib/auth-context';
 import { AuthForm } from '@/components/AuthForm';
+import { AccountSkeleton } from '@/components/Skeletons';
 
 export default function AccountPage() {
   const { ready, email, isAnonymous, hemisphere, error, retry, signOut, setHemisphere } = useAuth();
@@ -24,7 +25,7 @@ export default function AccountPage() {
   };
 
   if (!ready) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <AccountSkeleton />;
   }
 
   if (error) {

@@ -9,6 +9,7 @@ import { getPlantStatus } from '@/lib/careStatus';
 import { NewPlant, Plant } from '@/types/plant';
 import AddPlantModal from '@/components/AddPlantModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { PlantsGridSkeleton } from '@/components/Skeletons';
 
 export default function PlantsPage() {
   const { ready, userId, error, retry } = useAuth();
@@ -109,7 +110,7 @@ export default function PlantsPage() {
   }
 
   if (!ready || loading) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <PlantsGridSkeleton />;
   }
 
   const getStatusColor = (status: string) => {

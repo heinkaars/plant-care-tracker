@@ -13,6 +13,7 @@ import { getCurrentSeason, getSeasonDisplay } from '@/lib/seasonUtils';
 import EditPlantModal from '@/components/EditPlantModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CareNotesModal from '@/components/CareNotesModal';
+import { PlantDetailSkeleton } from '@/components/Skeletons';
 
 export default function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -123,7 +124,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   if (!ready || loading || !plant) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <PlantDetailSkeleton />;
   }
 
   const getStatusColor = (status: string) => {
