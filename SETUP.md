@@ -1,8 +1,31 @@
 # Quick Setup Guide
 
-## Your Plant Care Tracker is Ready! 🎉
+## Set Up Supabase First (Required)
 
-The development server is already running at: **http://localhost:3000**
+The app cannot build or run without a Supabase project — every page needs a
+Supabase client to bootstrap a session.
+
+1. Create a free project at https://supabase.com.
+2. In the SQL Editor, run `supabase/schema.sql` from this repo.
+3. Under Authentication → Providers, enable **anonymous sign-ins** (the app
+   creates an anonymous session automatically on first visit).
+4. Create `.env.local` in the project root:
+```bash
+cp env.example .env.local
+```
+5. Fill in the Supabase values from Project Settings → API:
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+6. Start the development server:
+```bash
+npm run dev
+```
+
+Open http://localhost:3000 in your browser.
 
 ## Next Steps
 
@@ -12,17 +35,12 @@ To enable AI-powered plant search and camera identification:
 
 1. Get an OpenAI API key from: https://platform.openai.com/api-keys
 
-2. Create a `.env.local` file in the project root:
-```bash
-cp env.example .env.local
-```
-
-3. Edit `.env.local` and add your API key:
+2. Edit `.env.local` and add your API key:
 ```
 OPENAI_API_KEY=your_actual_api_key_here
 ```
 
-4. Restart the development server (Ctrl+C and run `npm run dev` again)
+3. Restart the development server (Ctrl+C and run `npm run dev` again)
 
 **Note**: AI features are optional. You can use manual plant entry without an API key.
 
@@ -62,10 +80,14 @@ Open http://localhost:3000 in your browser and:
 - Camera-based plant identification
 - Automatic care schedule recommendations
 
-### Data Storage
-- All data is stored in your browser's LocalStorage
-- Data persists across sessions
-- No account or backend required
+### Accounts & Data Storage
+- Data lives in your Supabase project's Postgres database, scoped to you via
+  Row Level Security
+- An anonymous account is created automatically on first visit, so you can
+  start adding plants right away
+- Sign up from `/account` to turn that anonymous session into a permanent
+  account (with email + password) without losing your plants
+- Forgot your password? Use the "Forgot password?" link on the sign-in screen
 
 ## Development Commands
 
@@ -81,6 +103,9 @@ npm start
 
 # Run linter
 npm run lint
+
+# Run tests
+npm run test
 ```
 
 ## Troubleshooting
@@ -90,10 +115,12 @@ npm run lint
 - Restart the development server after adding the API key
 - Check the browser console for error messages
 
-### Data Not Persisting?
-- Make sure you're using the same browser
-- Check that LocalStorage is enabled in your browser
-- Private/Incognito mode may not persist data
+### Data Not Persisting, or Every Page Failing to Load?
+- Make sure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  are set in `.env.local` and the dev server was restarted after adding them
+- Make sure you ran `supabase/schema.sql` in your project's SQL Editor
+- Make sure anonymous sign-ins are enabled (Authentication → Providers)
+- Check the browser console and terminal for Supabase errors
 
 ### Port Already in Use?
 - Stop other applications using port 3000

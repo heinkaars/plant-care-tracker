@@ -876,19 +876,52 @@ JSX structure.
 
 ### 25. Documentation is out of date as of `694dbad`
 
-**Status:** Open
+**Status:** Fixed — 2026-09-30
 
-Both [README.md](README.md) and [SETUP.md](SETUP.md) still describe
-LocalStorage as the storage layer and omit Supabase entirely:
+Both [README.md](README.md) and [SETUP.md](SETUP.md) still described
+LocalStorage as the storage layer and omitted Supabase entirely:
 
-- README lists "Data Storage: Local Storage (browser-based)" in the tech
-  stack, documents only `OPENAI_API_KEY`, and its project-structure tree omits
+- README listed "Data Storage: Local Storage (browser-based)" in the tech
+  stack, documented only `OPENAI_API_KEY`, and its project-structure tree omitted
   `lib/supabase/`, `middleware.ts`, `lib/api-guard.ts`, and `supabase/schema.sql`.
-- SETUP claims "No account or backend required", and its "Data Not Persisting?"
-  troubleshooting section now gives actively wrong advice (it tells users to
+- SETUP claimed "No account or backend required", and its "Data Not Persisting?"
+  troubleshooting section gave actively wrong advice (it told users to
   check that LocalStorage is enabled).
-- README's "Future Enhancements" list opens with "Backend database for data
+- README's "Future Enhancements" list opened with "Backend database for data
   sync across devices" — which is what `694dbad` actually did.
+
+**Resolved.** Rewrote both docs to describe the Supabase-backed app that
+actually exists on this branch:
+
+- [README.md](README.md): tech stack now lists Supabase (Postgres + RLS +
+  Auth) instead of LocalStorage, adds an "Accounts" feature bullet
+  (anonymous session, sign up/in, password reset), the install steps now
+  require filling in the three Supabase env vars from `env.example` and
+  running `supabase/schema.sql` + enabling anonymous sign-ins before `npm run
+  dev` works at all, the project-structure tree adds `lib/supabase/`,
+  `middleware.ts`, `lib/api-guard.ts`, `supabase/schema.sql`, `app/account/`,
+  and the error-boundary/auth/editing components added since, "Data Storage"
+  describes the RLS-scoped Postgres model instead of LocalStorage, `GPT-4` →
+  `GPT-4o` (item 9), and "Future Enhancements" no longer lists the
+  already-shipped backend-database item (replaced with the still-open
+  Supabase Storage migration, item 29).
+- [SETUP.md](SETUP.md): opens with the now-required Supabase project setup
+  (schema, anonymous sign-ins, env vars) before the optional OpenAI-key
+  section, replaces "No account or backend required" with a description of
+  the anonymous-session/sign-up/password-reset flow, adds `npm run test` to
+  the command list, and replaces the LocalStorage troubleshooting entry with
+  one that matches the actual failure mode (missing/unset Supabase env vars
+  or schema not run — item 1) and how to fix it.
+
+Left as-is: neither doc mentions the `add-supabase-auth` branch/main split or
+this automation, since both are repo-process details tracked in ISSUES.md
+itself, not user-facing product docs.
+
+Verified: `npm ci` (node_modules wasn't present in this checkout), `npx tsc
+--noEmit` clean, `npm run lint` clean (zero warnings), the 49-test vitest
+suite passes unchanged, and `npm run build` succeeds with dummy
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`OPENAI_API_KEY`
+values. This item is documentation-only — no application code changed.
 
 ---
 
