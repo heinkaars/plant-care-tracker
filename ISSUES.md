@@ -998,7 +998,10 @@ invalidates the first mail's token, so during testing an older link reports
 ### 29. Photos still live in a Postgres `text` column, not Supabase Storage
 
 **Priority:** P0
-**Status:** Open
+**Status:** Blocked — 2026-10-01 — needs a real Supabase Storage bucket + RLS
+policies created in the live project, plus a decision on existing base64
+photos; this sandboxed environment has no Supabase credentials (no
+`.env.local`, confirmed this run — see item 1 for how those get provisioned)
 
 Split out of item 6, which closed today with the client-side-compression and
 request-size-limit half of the fix. This is the other half: photos are still
@@ -1031,6 +1034,28 @@ fetch.
 - Decide what to do with photos already sitting in the `photo` column from
   before this migration (backfill into Storage, or accept they stay as
   legacy data URLs).
+
+**Checked — 2026-10-01.** Confirmed nothing has changed since this was split
+out: `plants.photo` is still `text`
+([supabase/schema.sql:16](supabase/schema.sql#L16)), `getPlants` still does
+`select('*')` ([lib/storage.ts:45](lib/storage.ts#L45)), and no bucket exists
+in `supabase/schema.sql`. This environment still has no `.env.local` and no
+Supabase credentials, so the blocker the item already named is unchanged.
+
+Writing the application code without the bucket is not a safe partial step
+here, unlike most other items in this file: this pushes straight to `main`,
+and `addPlant`/`updatePlant` switching to "upload to Storage, store the URL"
+would make every photo upload fail in the live app the moment it deploys,
+since the bucket + RLS policies don't exist yet in that project. That's a
+regression of a currently-working feature, not an untested addition — a
+different risk than, say, item 17's hemisphere threading, which degrades to
+its existing default when unverified. The bucket has to exist in the live
+project before this code can ship, and creating it (dashboard or a
+`storage.buckets`/policy migration applied there) plus deciding how to treat
+the existing base64 photos are both still outside what this sandboxed run
+can do. Leaving `Blocked` rather than picking a different item, per this
+automation's own rule for a blocker that needs infrastructure or a decision
+only a human can provide.
 
 ### 30. `addCareEvent` is still a client-side read-modify-write, so two tabs can still lose an event
 
