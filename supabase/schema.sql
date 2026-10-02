@@ -120,3 +120,67 @@ $$;
 revoke all on function public.claim_api_budget(text[], integer[], integer) from public;
 revoke all on function public.claim_api_budget(text[], integer[], integer) from anon, authenticated;
 grant execute on function public.claim_api_budget(text[], integer[], integer) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Atomic care-event append, for lib/storage.ts's addCareEvent (ISSUES.md #30).
+--
+-- addCareEvent used to read a plant's care_history/care_schedules into JS,
+-- mutate them there, then write both columns back. Two tabs marking care on
+-- the same plant could both read the same pre-mutation state and then race
+-- to write — the second write wins and silently drops the first tab's event.
+--
+-- This function does the append and the matching schedule's
+-- lastCareDate/nextDueDate update inside one UPDATE statement, computed from
+-- whatever care_history/care_schedules the row holds at the moment this
+-- statement runs rather than from a value read earlier in JS. Two concurrent
+-- calls serialize on Postgres's row lock for the UPDATE, so the second call's
+-- jsonb expressions are evaluated against the first call's already-committed
+-- result — nothing is lost.
+--
+-- The next-due-date arithmetic itself (seasonal frequency, hemisphere, the
+-- frequency-0-means-skip rule) stays in lib/seasonUtils.ts / lib/careStatus.ts
+-- and is resolved client-side before calling this — porting that into SQL
+-- would duplicate it in two languages for no benefit, since none of it reads
+-- data subject to the two-tab race (a schedule's configured frequency isn't
+-- changed by marking care done).
+--
+-- security invoker (the default, stated explicitly) so RLS still scopes the
+-- update to auth.uid() exactly as the "Users can update own plants" policy
+-- already does for a plain client-side update — a plant id the caller
+-- doesn't own matches zero rows rather than being bypassed.
+create or replace function public.append_care_event(
+  p_plant_id      uuid,
+  p_care_type     text,
+  p_care_date     text,
+  p_next_due_date text,
+  p_notes         text default null
+)
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+  update public.plants
+  set
+    care_history = jsonb_build_array(
+      jsonb_strip_nulls(jsonb_build_object(
+        'id', gen_random_uuid()::text,
+        'type', p_care_type,
+        'date', p_care_date,
+        'notes', p_notes
+      ))
+    ) || care_history,
+    care_schedules = (
+      select coalesce(jsonb_agg(
+        case
+          when sched->>'type' = p_care_type then
+            sched
+              || jsonb_build_object('lastCareDate', p_care_date)
+              || jsonb_build_object('nextDueDate', p_next_due_date)
+          else sched
+        end
+      ), '[]'::jsonb)
+      from jsonb_array_elements(care_schedules) as sched
+    )
+  where id = p_plant_id;
+$$;

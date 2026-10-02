@@ -1060,7 +1060,7 @@ only a human can provide.
 ### 30. `addCareEvent` is still a client-side read-modify-write, so two tabs can still lose an event
 
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — 2026-10-02
 
 Split out of item 10, which closed today with the bandwidth half of the fix
 (`storage.updateCareData` now writes only `care_schedules`/`care_history`,
@@ -1083,6 +1083,45 @@ and only do the atomic append/update in SQL) — and either way, verifying it
 against a live project, which this sandboxed run has no Supabase credentials
 for (same blocker as item 29; see item 1 for how those get provisioned in a
 run that has them).
+
+**Resolved — took the "already-resolved frequency" option.** Added
+`public.append_care_event(p_plant_id, p_care_type, p_care_date,
+p_next_due_date, p_notes)` to [supabase/schema.sql](supabase/schema.sql): one
+`security invoker` SQL function that prepends the new `care_history` entry
+and updates the matching `care_schedules` entry's `lastCareDate`/
+`nextDueDate` in a single `UPDATE`, computed from `jsonb_build_object`/
+`jsonb_agg` over whatever the row holds at the moment that statement runs —
+not from a value read earlier in JS. Two concurrent calls serialize on
+Postgres's row lock for the `UPDATE`, so the second call's jsonb expressions
+see the first call's already-committed result instead of overwriting it.
+RLS still applies (`security invoker`, no explicit grant/revoke needed since
+this one isn't security-sensitive like `claim_api_budget` — a plant id the
+caller doesn't own just matches zero rows).
+
+Didn't port the season/frequency logic into SQL: a schedule's configured
+frequency (`frequencyDays` / `seasonalFrequency`) isn't itself touched by the
+two-tabs race (only `lastCareDate`/`nextDueDate`/`care_history` are, and
+those are exactly what the function now updates atomically), so there was no
+need to duplicate [lib/seasonUtils.ts](lib/seasonUtils.ts) in two languages.
+`storage.addCareEvent` ([lib/storage.ts](lib/storage.ts)) still does one
+`getPlant` read first — only to find the schedule's type and resolve
+`nextDueDate` client-side exactly as before, and to no-op when the plant
+doesn't exist — then calls `supabase.rpc('append_care_event', ...)` instead
+of building the full `care_history`/`care_schedules` arrays in JS and writing
+them back with `updateCareData`, which is now dead code and removed along
+with its `CareHistory` import.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean, the 49-test vitest
+suite (items 13/17) passes unchanged (none of it covered `storage.ts`, so
+none of it could have caught a regression here either — see item 31), and
+`npm run build` succeeds with dummy env vars. Not exercised against a live
+Supabase project in this run (no credentials in this environment, same
+constraint as items 1/29) — the function hasn't been run against the live
+project's actual schema, and the two-tabs race it fixes can't be reproduced
+without one. A follow-up run with real credentials should run
+`supabase/schema.sql`'s new function in the live project and click through
+marking care done from two browser tabs on the same plant before trusting
+this further.
 
 ### 27. Sign-out had never been run against the live project
 

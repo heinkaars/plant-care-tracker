@@ -1,4 +1,4 @@
-import { Plant, NewPlant, CareHistory, CareType } from '@/types/plant';
+import { Plant, NewPlant, CareType } from '@/types/plant';
 import { addDays, parseISO } from 'date-fns';
 import { getSeasonalFrequency } from '@/lib/seasonUtils';
 import { createClient } from '@/lib/supabase/client';
@@ -135,31 +135,6 @@ export const storage = {
     }
   },
 
-  // Update just the care schedule/history columns — used by addCareEvent so
-  // a check-in doesn't round-trip name/photo/notes on every write (the
-  // photo especially, since it's still a base64 string in this column; see
-  // ISSUES.md #29). `updatePlant` above stays the full-row update for a
-  // future edit UI (ISSUES.md #12).
-  updateCareData: async (
-    id: string,
-    careSchedules: Plant['careSchedules'],
-    careHistory: Plant['careHistory']
-  ): Promise<void> => {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('plants')
-      .update({
-        care_schedules: careSchedules,
-        care_history: careHistory,
-      })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating care data:', error);
-      fail('Could not save that care update. Check your connection and try again.');
-    }
-  },
-
   // Delete a plant
   deletePlant: async (id: string): Promise<void> => {
     const supabase = createClient();
@@ -170,7 +145,14 @@ export const storage = {
     }
   },
 
-  // Add care event to a plant
+  // Add care event to a plant. The append itself (new care_history entry,
+  // matching schedule's lastCareDate/nextDueDate) runs atomically in the
+  // append_care_event Postgres function rather than as a client-side
+  // read-modify-write of both columns — see ISSUES.md #30 for why that used
+  // to let two tabs marking care on the same plant lose one of the two
+  // events. getPlant below is only used to look up the schedule's configured
+  // frequency (static config, not touched by the race) and to no-op when the
+  // plant doesn't exist.
   addCareEvent: async (
     plantId: string,
     careType: CareType,
@@ -181,27 +163,31 @@ export const storage = {
     if (!plant) return;
 
     const now = new Date().toISOString();
-
-    const careEvent: CareHistory = {
-      id: `${Date.now()}-${Math.random()}`,
-      type: careType,
-      date: now,
-      notes,
-    };
-    plant.careHistory.unshift(careEvent);
-
     const schedule = plant.careSchedules.find((s) => s.type === careType);
+
+    let nextDueDate: string | null = null;
     if (schedule) {
-      schedule.lastCareDate = now;
       const frequency = schedule.seasonalFrequency
         ? getSeasonalFrequency(schedule.seasonalFrequency, undefined, hemisphere)
         : schedule.frequencyDays;
       // A frequency of 0 means "skip this season" (e.g. no winter fertilizing) —
       // leave nextDueDate unset rather than due immediately, until the season
       // turns and the next "Mark Done" picks up a non-zero frequency.
-      schedule.nextDueDate = frequency === 0 ? null : addDays(parseISO(now), frequency).toISOString();
+      nextDueDate = frequency === 0 ? null : addDays(parseISO(now), frequency).toISOString();
     }
 
-    await storage.updateCareData(plantId, plant.careSchedules, plant.careHistory);
+    const supabase = createClient();
+    const { error } = await supabase.rpc('append_care_event', {
+      p_plant_id: plantId,
+      p_care_type: careType,
+      p_care_date: now,
+      p_next_due_date: nextDueDate,
+      p_notes: notes ?? null,
+    });
+
+    if (error) {
+      console.error('Error adding care event:', error);
+      fail('Could not save that care update. Check your connection and try again.');
+    }
   },
 };
