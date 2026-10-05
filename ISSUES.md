@@ -1155,7 +1155,7 @@ know which of the two it was.
 ### 32. `next`'s bundled postcss stays vulnerable short of a major-version upgrade
 
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — 2026-10-05
 
 Split out of item 14, which closed today with the `npm audit fix` +
 15.x-patch half of the fix. `next@15.5.25` (the latest 15.x release) still
@@ -1171,6 +1171,82 @@ migration (removed APIs, changed defaults, config changes) that needs its
 own review of the Next 16 upgrade guide and a full click-through of the app
 afterward — not something to force through as a side effect of a dependency
 audit. Do that review, then take the major version bump deliberately.
+
+**Resolved.** Reviewed the Next 15→16 migration guide first and checked each
+breaking change against this codebase before touching anything:
+
+- **Async request APIs** (`cookies()`/`headers()`/dynamic `params`) — already
+  fully migrated (`lib/supabase/server.ts` already `await`s `cookies()`,
+  `app/plants/[id]/page.tsx` already takes `params: Promise<...>` and unwraps
+  it with `use()`). Nothing to change.
+- **`middleware.ts` → `proxy.ts`** — still works in 16 but deprecated (a
+  warning, not a hard error). Renamed the file and its exported function
+  (`middleware` → `proxy`) anyway rather than leaving a deprecation warning
+  in every request log; `lib/supabase/middleware.ts` (the helper it calls,
+  a different file) didn't need renaming, just its doc comment pointing at
+  the new filename, same for the matching comment in
+  [lib/supabase/server.ts](lib/supabase/server.ts). Updated the project-tree
+  entry in [README.md](README.md) to match.
+- **Turbopack as the default bundler** — `next.config.js` has no custom
+  `webpack()` config (confirmed by reading it — it's an empty
+  `nextConfig = {}`), so there was nothing for Turbopack to silently ignore.
+- **`next/image` `objectFit`/`objectPosition` prop removal** — every `<Image>`
+  in the app already uses `fill` + a Tailwind `object-cover` class (item 19),
+  never the deprecated style props. Nothing to change.
+- **`revalidateTag`/`serverRuntimeConfig`/`publicRuntimeConfig`/AMP/etc.** —
+  grepped for all of them; none are used anywhere in this codebase.
+- **React 19** — confirmed via search that Next 16 still supports React
+  18.2+ (deprecated, not removed; required starting in Next 17). Stayed on
+  React 18 rather than bundling an unrelated React major-version migration
+  into this change — `npm install` raised no peer-dependency conflict, which
+  corroborates that.
+- **`next lint` removal** — already moot; item 8 moved this project to the
+  `eslint` CLI directly.
+
+The one change that did need real work: **`eslint-config-next@16` requires
+ESLint 9 and ships flat config only** — the legacy `.eslintrc.json` (added by
+item 8 for `eslint@8`) stopped being read at all. Bumped `eslint` to `^9.0.0`
+and `eslint-config-next` to `^16.3.5`, replaced `.eslintrc.json` +
+`.eslintignore` with [eslint.config.mjs](eslint.config.mjs) spreading
+`eslint-config-next/core-web-vitals` and `eslint-config-next/typescript`
+(the flat-config equivalent of the old `extends` list, found by reading
+`eslint-config-next`'s own `dist/*.js` directly rather than guessing).
+
+That pulled in `eslint-plugin-react-hooks@7`, whose `recommended` config adds
+a new `react-hooks/set-state-in-effect` rule that fired as an **error** (not
+a warning) on `app/page.tsx`, `app/plants/page.tsx`, and
+`app/plants/[id]/page.tsx` — all for the same shape: `setLoading(true)` /
+`setLoadError(null)` called synchronously at the top of a data-fetching
+effect, before the async call. That's the exact pattern React's own docs use
+for fetch-in-an-effect (`setBio(null)` before `fetchBio(...).then(...)` in
+the "You Might Not Need an Effect" page), not a bug in this codebase, so
+rather than restructure three working effects to dodge a brand-new and
+arguably over-eager default, turned the rule off in `eslint.config.mjs` with
+a comment explaining why.
+
+Also ran `next build` once with the new version to let it make its own
+"mandatory" one-time `tsconfig.json` adjustments (`jsx: "preserve"` →
+`"react-jsx"`, and `.next/dev/types/**/*.ts` added to `include`, both
+Turbopack requirements) — confirmed stable across a second build with no
+further changes, and that `tsc --noEmit` is still clean afterward.
+
+Confirmed the fix actually fixes the thing this item is about:
+`node_modules/next/node_modules/postcss` is now `8.5.23` (was `8.4.31`), and
+`npm audit --omit=dev` reports 0 vulnerabilities (was 1).
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean (zero
+warnings/errors — the only two findings surfaced by the new flat config and
+plugin versions were addressed above, not suppressed-and-ignored), the
+49-test vitest suite (items 13/17) passes unchanged, and `npm run build`
+succeeds (now using Turbopack by default) with the same dummy env vars this
+automation always uses. Not click-through-tested in a browser against a live
+Supabase project in this run — no credentials or way to launch/screenshot a
+dev server in this sandboxed environment, same constraint noted on nearly
+every item since item 9. The `proxy.ts` rename in particular (the one change
+on the request path for every page) is worth clicking through for real in a
+run that has a browser, even though the build output does confirm it's
+registered (`ƒ Proxy (Middleware)` in the route listing) and its logic is
+byte-for-byte unchanged from the old `middleware.ts`.
 
 ### 31. Test coverage stops at `lib/careStatus.ts` / `lib/seasonUtils.ts`
 

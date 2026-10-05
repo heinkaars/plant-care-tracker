@@ -20,7 +20,7 @@ A modern web application to track houseplant care schedules with AI-powered feat
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **Data Storage & Auth**: Supabase (Postgres with Row Level Security, plus
@@ -136,7 +136,7 @@ plant-care-tracker/
 │   ├── api-guard.ts             # Per-user rate limiting for the AI routes
 │   ├── careStatus.ts           # Care status utilities
 │   └── seasonUtils.ts          # Seasonal frequency utilities
-├── middleware.ts                # Refreshes the Supabase session cookie
+├── proxy.ts                     # Refreshes the Supabase session cookie
 ├── supabase/
 │   └── schema.sql               # Postgres schema + Row Level Security policies
 └── types/

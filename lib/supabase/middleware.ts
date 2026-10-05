@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * happens to trigger a client-side refresh — this keeps Server Components and
  * Route Handlers looking at a live token.
  *
- * Wired up via middleware.ts at the project root.
+ * Wired up via proxy.ts at the project root.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

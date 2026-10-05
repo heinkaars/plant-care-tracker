@@ -26,7 +26,7 @@ export async function createClient() {
             );
           } catch {
             // Called from a Server Component that can't set cookies (e.g.
-            // during static rendering). Harmless as long as middleware.ts is
+            // during static rendering). Harmless as long as proxy.ts is
             // also refreshing the session on every request.
           }
         },
