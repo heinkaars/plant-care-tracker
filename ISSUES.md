@@ -1251,7 +1251,7 @@ byte-for-byte unchanged from the old `middleware.ts`.
 ### 31. Test coverage stops at `lib/careStatus.ts` / `lib/seasonUtils.ts`
 
 **Priority:** P1
-**Status:** Open
+**Status:** Fixed — 2026-10-06
 
 Split out of item 13, which closed today with a real vitest suite for the
 two pure date/business-logic modules it named as the starting point. Nothing
@@ -1264,3 +1264,63 @@ branching (item 28) are all realistic targets — they're logic-heavy and
 don't require a browser. Component tests (React Testing Library) for
 `AddPlantModal`/`EditPlantModal`/`AuthForm` are a separate, larger step this
 item isn't scoping.
+
+**Resolved — three of the four named targets.** Added:
+
+- [lib/plantAiSchema.test.ts](lib/plantAiSchema.test.ts): `plantAiResponseSchema`
+  accepts a well-formed AI response, defaults `scientificName`/`careNotes`
+  when omitted, and rejects a response missing a season key, a stringified
+  number where a number is required, a missing `name`, or a missing care
+  category — the exact malformed shapes item 9 added validation to catch.
+- [lib/storage.test.ts](lib/storage.test.ts): mocks `@/lib/supabase/client`
+  with a small chainable/thenable query-builder fake (matching how the real
+  `PostgrestFilterBuilder` is awaited directly, with or without a terminal
+  `.single()`/`.maybeSingle()`) and covers every method — `getPlants`/
+  `getPlant`'s row-mapping and `fail()`-wrapped errors (item 7), the
+  not-found-vs-error distinction `getPlant` has to preserve, `addPlant`'s
+  signed-in-user check, `updatePlant`/`deletePlant`'s success/failure paths,
+  and `addCareEvent`'s `nextDueDate` computation — frequencyDays, the
+  frequency-0 winter-skip (item 2), the seasonal-frequency branch including
+  northern vs. southern hemisphere (item 17), a plant with no matching
+  schedule, the no-op when the plant doesn't exist, and the `append_care_event`
+  rpc failure path (item 30, since `updateCareData` no longer exists —
+  superseded by the rpc call before this item got picked up).
+- [lib/auth-context.test.ts](lib/auth-context.test.ts): table-drives
+  `friendlyMessage` across every branch, including the expired/invalid-token
+  case item 28 fixed (both a wrong and a stale code map to the same message,
+  deliberately not claiming to know which), case-insensitivity, and the
+  generic fallback's `console.warn`. Exported `friendlyMessage` from
+  [lib/auth-context.tsx](lib/auth-context.tsx) (previously module-private)
+  since it's pure branching logic with no reason to hide it from a test file
+  in the same package.
+
+37 new tests, 86 total, all passing. Deliberately not done: the two API
+routes' malformed-response handling end-to-end (would need mocking the
+`openai` client and `NextRequest`/`guard` — heavier scaffolding than the
+pure-function targets above, and `plantAiResponseSchema`'s own tests already
+cover the validation logic those routes just call) and the component tests
+this item already scoped out. See item 33 for what's left.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean (zero
+warnings/errors), `npm run test` 86/86 passing (up from 49), and `npm run
+build` succeeds with the same dummy env vars this automation always uses.
+
+### 33. Remaining test-coverage gaps after item 31
+
+**Priority:** P2
+**Status:** Open
+
+Item 31 covered `lib/plantAiSchema.ts`, `lib/storage.ts`, and
+`lib/auth-context.tsx`'s `friendlyMessage`. Still untested:
+
+- `app/api/search-plant/route.ts` / `app/api/identify-plant/route.ts`'s
+  malformed-response handling end-to-end (the JSON-parse-then-regex-fallback
+  step, the 502 on a failed `safeParse`, the 413/400/500 error paths) — needs
+  mocking the `openai` client and Next's `NextRequest`/`guard` from
+  `lib/api-guard.ts`.
+- `lib/api-guard.ts` itself (the per-user/per-IP rate limiting item 18's
+  401/429 paths depend on).
+- Component tests (React Testing Library) for `AddPlantModal`,
+  `EditPlantModal`, and `AuthForm`'s multi-step sign-up/reset flows — not
+  scoped by item 31 either, and would need `@testing-library/react` (and
+  probably `jsdom`) added as new dependencies.

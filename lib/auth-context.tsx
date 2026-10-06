@@ -64,8 +64,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const MAX_ATTEMPTS = 5;
 
-/** Supabase phrasing is aimed at developers; these are for people. */
-function friendlyMessage(raw: string): string {
+/** Supabase phrasing is aimed at developers; these are for people. Exported for testing the branching directly (see ISSUES.md #28/#31). */
+export function friendlyMessage(raw: string): string {
   const message = raw.toLowerCase();
   if (message.includes('invalid login credentials')) {
     return 'That email and password do not match an account.';
