@@ -1308,7 +1308,7 @@ build` succeeds with the same dummy env vars this automation always uses.
 ### 33. Remaining test-coverage gaps after item 31
 
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — 2026-10-07
 
 Item 31 covered `lib/plantAiSchema.ts`, `lib/storage.ts`, and
 `lib/auth-context.tsx`'s `friendlyMessage`. Still untested:
@@ -1324,3 +1324,47 @@ Item 31 covered `lib/plantAiSchema.ts`, `lib/storage.ts`, and
   `EditPlantModal`, and `AuthForm`'s multi-step sign-up/reset flows — not
   scoped by item 31 either, and would need `@testing-library/react` (and
   probably `jsdom`) added as new dependencies.
+
+**Resolved — the `lib/api-guard.ts` gap.** Added
+[lib/api-guard.test.ts](lib/api-guard.test.ts), mocking both
+`@/lib/supabase/server` (for `requireUser`'s `auth.getUser()`) and
+`@supabase/supabase-js` (for the service-role `usageStore` the durable
+rate-limit path uses), with `NEXT_PUBLIC_SUPABASE_URL` /
+`SUPABASE_SERVICE_ROLE_KEY` / `TRUSTED_PROXY_HOPS` stubbed via `vi.stubEnv`
+before the module import, since all three are read once at module scope.
+Covers `requireUser`'s null/error/success paths, the in-memory `rateLimited`
+fallback (per-key independence and the max-then-refuse boundary), and
+`guard()`'s 401 (no session, never checks the budget), 200 (under budget),
+429 (durable store reports the budget spent), per-user-plus-per-address
+bucket construction from a trusted `x-forwarded-for`, and the fallback to
+the in-memory limiter when the durable `claim_api_budget` rpc call throws.
+10 new tests, 96 total, all passing.
+
+Deliberately not done in this pass: the two API routes' end-to-end
+malformed-response handling and the component tests — both still need real
+scaffolding (`openai` client mocks, `@testing-library/react` + `jsdom` as new
+dependencies) and are tracked on as item 34 rather than folded into this one.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean (zero
+warnings/errors), `npm run test` 96/96 passing (up from 86), and `npm run
+build` succeeds with the same dummy env vars this automation always uses.
+
+### 34. Test-coverage gaps still open after item 33: API route handlers and component tests
+
+**Priority:** P2
+**Status:** Open
+
+Split out of item 33, which closed today with `lib/api-guard.ts` covered.
+Two gaps remain, both needing real scaffolding rather than a quick mock:
+
+- `app/api/search-plant/route.ts` / `app/api/identify-plant/route.ts`'s
+  end-to-end handling — the JSON-parse-then-regex-fallback step, the 502 on
+  a failed `plantAiResponseSchema.safeParse` (item 9), and the
+  401/413/400/429/500 error paths through `lib/api-guard.ts`'s `guard()`.
+  Needs mocking the `openai` SDK's `chat.completions.create` and
+  constructing a real `Request`/`NextRequest` for each route to handle.
+- Component tests (React Testing Library) for `AddPlantModal`,
+  `EditPlantModal`, and `AuthForm`'s multi-step sign-up/confirm/reset flows.
+  Needs `@testing-library/react` and `jsdom` (or similar) added as new
+  dev dependencies, plus a `vitest.config.ts` environment switch (or a
+  second project) since the existing suite runs under `environment: 'node'`.
