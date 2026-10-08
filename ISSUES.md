@@ -1352,7 +1352,7 @@ build` succeeds with the same dummy env vars this automation always uses.
 ### 34. Test-coverage gaps still open after item 33: API route handlers and component tests
 
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — 2026-10-08
 
 Split out of item 33, which closed today with `lib/api-guard.ts` covered.
 Two gaps remain, both needing real scaffolding rather than a quick mock:
@@ -1368,3 +1368,60 @@ Two gaps remain, both needing real scaffolding rather than a quick mock:
   Needs `@testing-library/react` and `jsdom` (or similar) added as new
   dev dependencies, plus a `vitest.config.ts` environment switch (or a
   second project) since the existing suite runs under `environment: 'node'`.
+
+**Resolved — the API route handler half.** Added
+[app/api/search-plant/route.test.ts](app/api/search-plant/route.test.ts) and
+[app/api/identify-plant/route.test.ts](app/api/identify-plant/route.test.ts),
+mocking the `openai` package's default export (a class whose
+`chat.completions.create` is a shared `vi.fn()`) and `@/lib/api-guard`'s
+`guard` function — no new dependency needed, since both are mocked the same
+way `lib/storage.test.ts` and `lib/api-guard.test.ts` already mock
+`@/lib/supabase/client`/`@/lib/supabase/server`. A plain `Request` (not
+`NextRequest`) is enough to drive each `POST` handler, matching how
+`lib/api-guard.test.ts` already calls `guard()` with one — the handlers only
+ever call `.json()` and, for `identify-plant`, `.headers.get('content-length')`.
+
+Each file covers: the guard's 401/429 responses passed through unchanged
+(and that `openai` is never called when guard refuses), 400 on a missing
+`query`/`image`, 500 on a missing `OPENAI_API_KEY`, 200 with the validated
+data on a well-formed model response, the regex-fallback extracting JSON
+from a response with surrounding prose, 502 on a `plantAiResponseSchema`
+failure (item 9), 500 when there's no JSON to find at all, and 500 when the
+`openai` call itself throws. `identify-plant` additionally covers its 413
+oversized-body path — building a real `Request` with an explicit
+`content-length` header sized to a 9 MB body, since Node's `fetch`/`Request`
+does not auto-populate that header from the body the way a browser or a real
+HTTP server would.
+
+19 new tests, 115 total, all passing.
+
+Deliberately not done in this pass: the component tests for `AddPlantModal`/
+`EditPlantModal`/`AuthForm`, which still need `@testing-library/react` +
+`jsdom` as new dependencies and a `vitest.config.ts` environment change —
+tracked as item 35 rather than folded into this one.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean (zero
+warnings/errors), `npm run test` 115/115 passing (up from 96), and `npm run
+build` succeeds with the same dummy env vars this automation always uses.
+
+### 35. Component tests still missing: `AddPlantModal`, `EditPlantModal`, `AuthForm`
+
+**Priority:** P2
+**Status:** Open
+
+Split out of item 34, which closed today with the API route handler tests.
+The remaining gap is React component tests for `AddPlantModal`,
+`EditPlantModal`, and `AuthForm`'s multi-step sign-up/confirm/reset flows
+([components/AddPlantModal.tsx](components/AddPlantModal.tsx),
+[components/EditPlantModal.tsx](components/EditPlantModal.tsx),
+[components/AuthForm.tsx](components/AuthForm.tsx)) — none of it is covered
+today.
+
+Unlike every other test file in the repo, this needs new dev dependencies
+(`@testing-library/react`, `@testing-library/user-event`, and a DOM
+environment such as `jsdom` or `happy-dom`) plus a `vitest.config.ts` change,
+since the existing suite runs under `environment: 'node'` (no `document`).
+Vitest supports per-file environment overrides via a `// @vitest-environment
+jsdom` docblock, so this likely doesn't need a second project/config block —
+just the new dependencies and one `environment: 'jsdom'` comment per new test
+file.
