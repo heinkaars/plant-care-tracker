@@ -141,6 +141,7 @@ export function AuthForm() {
           We sent a reset code to <span className="font-medium">{formEmail}</span>. Enter it along
           with your new password.
         </p>
+        {notice && <p className="text-sm text-green-700">{notice}</p>}
         <input
           type="text"
           inputMode="numeric"

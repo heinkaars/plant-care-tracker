@@ -1407,7 +1407,7 @@ build` succeeds with the same dummy env vars this automation always uses.
 ### 35. Component tests still missing: `AddPlantModal`, `EditPlantModal`, `AuthForm`
 
 **Priority:** P2
-**Status:** Open
+**Status:** Fixed — 2026-10-09
 
 Split out of item 34, which closed today with the API route handler tests.
 The remaining gap is React component tests for `AddPlantModal`,
@@ -1425,3 +1425,64 @@ Vitest supports per-file environment overrides via a `// @vitest-environment
 jsdom` docblock, so this likely doesn't need a second project/config block —
 just the new dependencies and one `environment: 'jsdom'` comment per new test
 file.
+
+**Resolved.** Added `@testing-library/react@16.3.3`,
+`@testing-library/user-event@14.6.7`, and `jsdom@26.1.0` as dev dependencies
+(not the latest jsdom major — `jsdom@27`/`30` pin a Node engine range this
+sandboxed run's Node 22.22.0 doesn't satisfy; 26.x needs only `node >=18`
+and raised no `EBADENGINE` warning). No `vitest.config.ts` change was
+needed: every new test file opens with a `// @vitest-environment jsdom`
+docblock exactly as the item anticipated, so the existing suite keeps
+running under `environment: 'node'` by default.
+
+- [components/AddPlantModal.test.tsx](components/AddPlantModal.test.tsx):
+  the manual-entry name requirement, building a `NewPlant` with schedules
+  seeded via the current-season frequency (item 3), the AI-search and
+  camera-identify flows (mocking `fetch` and `lib/image`'s
+  `compressImageFile`) including the item 18 API-error-message passthrough,
+  and the item 2 "AI-provided summer frequency of 0 means skip" case end to
+  end through a real AI-search response.
+- [components/EditPlantModal.test.tsx](components/EditPlantModal.test.tsx):
+  prefilling from the plant, the name requirement, `computeNextDueDate`
+  recomputation on save for both a plain and a seasonal schedule (items
+  2/12), editing a seasonal frequency value and confirming the due date
+  moves with it, a failed save surfacing an error without closing the
+  modal, and the photo-replace success/failure paths.
+- [components/AuthForm.test.tsx](components/AuthForm.test.tsx): the
+  anonymous-vs-signed-in default mode, the two sign-up shapes (`'complete'`
+  vs `'confirmation-required'`, item 26), sign-in success and its friendly
+  error message, and the forgot-password request/confirm round trip.
+
+Both `AddPlantModal` and `EditPlantModal` mock `next/image` to a plain
+`<img>` — the loader/optimization machinery isn't what these tests are
+about — and `compressImageFile` from `lib/image.ts`, since that module
+drives an actual `<canvas>`/`Image` pipeline jsdom doesn't implement.
+`AuthForm` only needed `useAuth` mocked.
+
+Writing the forgot-password test surfaced a real bug, fixed in the same
+commit since it's a one-line, clearly-related fix in the exact component
+under test: `handleSubmit`'s `reset-request` branch calls `setNotice(...)`
+and `setMode('reset-confirm')` in the same tick, but the `reset-confirm`
+JSX branch never rendered `notice` — only the final (`sign-in`/`sign-up`)
+branch did. The "a reset code is on its way" message was being set and then
+silently never shown to the user. Added the same `{notice && ...}` paragraph
+to the `reset-confirm` branch.
+
+Every test file calls `cleanup()` from `@testing-library/react` in an
+`afterEach` — `@testing-library/react`'s automatic-cleanup entrypoint is a
+Jest-specific global hook this project (Vitest, no `setupFiles`) doesn't
+get for free, confirmed by the first run leaving DOM nodes mounted across
+tests until this was added.
+
+21 new tests, 136 total, all passing.
+
+Deliberately not done: a `vitest.config.ts` `setupFiles` entry to make
+`cleanup()` automatic for every current and future component test file —
+each file calling it explicitly is more lines but has no project-wide
+config to go stale or silently stop applying; revisit if more component
+test files make the repetition worth collapsing.
+
+Verified: `npx tsc --noEmit` clean, `npm run lint` clean (zero
+warnings/errors), `npm run test` 136/136 passing (up from 115), and
+`npm run build` succeeds with the same dummy env vars this automation
+always uses.
